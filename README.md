@@ -11,6 +11,9 @@ with a few tweaks:
  * implemented the random policy inside an agent class
  * improved the performance of the random agent by caching some arrays
  * customizable reward function
+ * RGB rendering
+
+![Hex board display](./rgb.png)
 
 Observation space is described by: `(board, player) = (NxN matrix, {0, 1})`
 Action space is described by: `(x, y)` where it is any position on the board.

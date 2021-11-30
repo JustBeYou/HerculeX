@@ -28,12 +28,16 @@ class HexEnv(gym.Env):
 
         # cache initial connection matrix (approx +100 games/s)
         self.initial_regions = regions
+        
+        self.viewer = None
 
     @property
     def opponent(self):
         return Player((self.player + 1) % 2)
 
     def reset(self):
+        self.viewer = None
+    
         if self.initial_regions is None:
             self.simulator = HexGame(self.active_player,
                                      self.initial_board.copy(),
@@ -71,6 +75,10 @@ class HexEnv(gym.Env):
         if not self.simulator.done:
             self.winner = self.simulator.make_move(action)
 
+        if self.viewer is not None:
+            color = (255, 0, 0) if self.active_player == Player.BLACK else (0, 0, 255)
+            self.viewer.color_hexagon(*self.simulator.action_to_coordinate(action), color)
+
         opponent_action = None
 
         if not self.simulator.done:
@@ -93,35 +101,21 @@ class HexEnv(gym.Env):
                 self.simulator.done, info)
 
     def render(self, mode='ansi', close=False):
-        board = self.simulator.board
-        print(" " * 6, end="")
-        for j in range(board.shape[1]):
-            print(" ", j + 1, " ", end="")
-            print("|", end="")
-        print("")
-        print(" " * 5, end="")
-        print("-" * (board.shape[1] * 6 - 1), end="")
-        print("")
-        for i in range(board.shape[1]):
-            print(" " * (1 + i * 3), i + 1, " ", end="")
-            print("|", end="")
-            for j in range(board.shape[1]):
-                if board[i, j] == Player.EMPTY:
-                    print("  O  ", end="")
-                elif board[i, j] == Player.BLACK:
-                    print("  B  ", end="")
-                else:
-                    print("  W  ", end="")
-                print("|", end="")
-            print("")
-            print(" " * (i * 3 + 1), end="")
-            print("-" * (board.shape[1] * 7 - 1), end="")
-            print("")
+        if self.viewer is None:
+            from .BoardViewer import BoardViewer
+            self.viewer = BoardViewer(self.simulator.board)
+                
+        return self.viewer.viewer.render(return_rgb_array=True)
 
     def opponent_move(self, info):
         state = (self.simulator.board, self.opponent)
         opponent_action = self.opponent_policy(state,
                                                info)
+                                               
+        if self.viewer is not None:
+            color = (255, 0, 0) if self.opponent == Player.BLACK else (0, 0, 255)
+            self.viewer.color_hexagon(*self.simulator.action_to_coordinate(opponent_action), color)                                 
+                                               
         self.winner = self.simulator.make_move(opponent_action)
         self.previous_opponent_move = opponent_action
         return opponent_action

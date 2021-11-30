@@ -1,0 +1,12 @@
+hex implementations
+https://github.com/nuankw/hex-game/blob/master/RandomHex.py
+https://github.com/williamcorsel/hexai/blob/a846a59d7ab9653f87c2c8af1b2ac8c91ae66e8b/hexexperiments.py
+www.lutanho.net/play/hex.html
+https://gist.github.com/localvoid/7763153
+https://github.com/Omaroid/hexGameAI
+
+
+https://www.reddit.com/r/AskProgramming/comments/p376ke/hex_game_terminal_state_checker_in_python/
+
+https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html
+https://github.com/tensorflow/agents/blob/master/docs/tutorials/1_dqn_tutorial.ipynb

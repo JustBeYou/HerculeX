@@ -1,9 +1,11 @@
 import gym
+from gym import spaces
 from .HexGame import Player, HexGame
 import numpy as np
+import random
 
 class HexEnv(gym.Env):
-    metadata = {"render.modes": ["ansi"]}
+    metadata = {"render.modes": ["human", "rgb_array", "ansi"]}
 
     def __init__(self, opponent_policy, reward_function,
                  player_color=Player.BLACK,
@@ -12,11 +14,16 @@ class HexEnv(gym.Env):
                  regions=None,
                  board_size=5,
                  debug=False):
+
+        self.seed()
         self.opponent_policy = opponent_policy
         self.reward_function = reward_function
 
         if board is None:
             board = Player.EMPTY * np.ones((board_size, board_size))
+
+        self.observation_space = spaces.Box(0, 2, (board_size, board_size))
+        self.action_space = spaces.Discrete(board_size ** 2)
 
         self.initial_board = board
         self.active_player = active_player
@@ -100,12 +107,22 @@ class HexEnv(gym.Env):
         return ((self.simulator.board, self.active_player), reward,
                 self.simulator.done, info)
 
-    def render(self, mode='ansi', close=False):
+    def seed(self, seed=None):
+        if seed is None:
+            seed = 42
+        
+        random.seed(seed)
+        return [seed]
+
+    def render(self, mode='human', close=False):
+        if mode == 'ansi':
+            return self._ansi_render()
+
         if self.viewer is None:
             from .BoardViewer import BoardViewer
             self.viewer = BoardViewer(self.simulator.board)
                 
-        return self.viewer.viewer.render(return_rgb_array=True)
+        return self.viewer.viewer.render(return_rgb_array=mode=='rgb_array')
 
     def opponent_move(self, info):
         state = (self.simulator.board, self.opponent)
@@ -119,3 +136,29 @@ class HexEnv(gym.Env):
         self.winner = self.simulator.make_move(opponent_action)
         self.previous_opponent_move = opponent_action
         return opponent_action
+
+    def _ansi_render(self):
+        board = self.simulator.board
+        print(" " * 6, end="")
+        for j in range(board.shape[1]):
+            print(" ", j + 1, " ", end="")
+            print("|", end="")
+        print("")
+        print(" " * 5, end="")
+        print("-" * (board.shape[1] * 6 - 1), end="")
+        print("")
+        for i in range(board.shape[1]):
+            print(" " * (1 + i * 3), i + 1, " ", end="")
+            print("|", end="")
+            for j in range(board.shape[1]):
+                if board[i, j] == player.EMPTY:
+                    print("  O  ", end="")
+                elif board[i, j] == player.BLACK:
+                    print("  B  ", end="")
+                else:
+                    print("  W  ", end="")
+                print("|", end="")
+            print("")
+            print(" " * (i * 3 + 1), end="")
+            print("-" * (board.shape[1] * 7 - 1), end="")
+            print("")

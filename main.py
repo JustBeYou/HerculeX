@@ -1,58 +1,160 @@
 import gym
-from minihex.RandomAgent import RandomAgent
 from minihex.rewards import end_game_reward
-from time import perf_counter_ns, sleep
+import argparse
+import util
+from numpy import mean
 
 BOARD_SIZE = 11
 
 def main():
-    our_agent = RandomAgent(board_size=BOARD_SIZE)
-    opponent_agent = RandomAgent(board_size=BOARD_SIZE)
+    args = parse_args()
+    action_handlers[args.action](args)
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        'action',
+        choices=action_handlers.keys(),
+        metavar='action',
+        help=f"Could be one of the following: {', '.join(action_handlers.keys())}"
+    )
+
+    parser.add_argument(
+        '--agent',
+        help="Our agent, we want the best for him/her/their.",
+        default='RandomAgent',
+    )
+
+    parser.add_argument(
+        '--opponent',
+        help="The enemy of the state. Must perish.",
+        default='RandomAgent',
+    )
+
+    parser.add_argument(
+        '--board-size',
+        default=BOARD_SIZE,
+    )
+
+    parser.add_argument(
+        '--reward-function',
+        choices=rewards.keys(),
+        default='end_game',
+        metavar='reward',
+        help=f"Could be one of the following: {', '.join(rewards.keys())}"
+    )
+
+    parser.add_argument(
+        '--episodes',
+        type=int,
+        default=1000,
+    )
+
+    parser.add_argument(
+        '--seed',
+        type=int,
+        default=42,
+        help='Seed the PRNGs in this env'
+    )
+
+    parser.add_argument(
+        '--load-agent-path',
+        default=None,
+    )
+
+    parser.add_argument(
+        '--load-opponent-path',
+        default=None,
+    )
+
+    parser.add_argument(
+        '--save-agent-path',
+        default=None,
+    )
+
+    parser.add_argument(
+        '--save-opponent-path',
+        default=None,
+    )
+
+    return parser.parse_args()
+
+def get_class_of_module(mod_name, cls_name):
+    mod = __import__(f'{mod_name}.{cls_name}')
+    mod = getattr(mod, cls_name)
+    return getattr(mod, cls_name)
+
+def create_env(args):
+    our_agent_class = get_class_of_module('agents', args.agent)
+    opponent_class = get_class_of_module('agents', args.opponent)
+
+    our_agent = our_agent_class(board_size=args.board_size)
+    opponent_agent = opponent_class(board_size=args.board_size)
+    
+    if args.load_agent_path is not None:
+        our_agent.load(args.load_agent_path)
+
+    if args.load_opponent_path is not None:
+        opponent.load(args.load_opponent_path)
+
     env = gym.make("hex-v1",
                opponent_policy=opponent_agent.get_action,
-               reward_function=end_game_reward,
+               reward_function=rewards[args.reward_function],
                board_size=BOARD_SIZE)
+    env.seed(args.seed)
 
-    run_episode(env, our_agent, debug=True)
+    return env, our_agent, opponent_agent
 
-    episodes = 1000
-    execs = profile_it(lambda: run_episode(env, our_agent), count=episodes)
+def benchmark_perf(args):
+    env, our_agent, opponent_agent = create_env(args)
+
+    episodes = args.episodes
+    execs = util.profile_it(lambda: util.run_episode(env, our_agent), count=episodes)
     print(f"{execs} executions per second (ran {episodes} episodes)")
 
-    #avg = average_reward(env, our_agent, episodes=episodes)
-    #print(f"Average reward over {episodes} episodes: {avg}")
+def benchmark_reward(args):
+    env, our_agent, opponent_agent = create_env(args)
 
-def profile_it(func, count=1000):
-    start = perf_counter_ns()
-    for i in range(count):
-        func()
-    end = perf_counter_ns()
-    return int(count / (end - start) * 1e9)
+    episodes = args.episodes
+    avg = util.average_reward(env, our_agent, episodes=args.episodes)
+    print(f"Average reward over {episodes} episodes: {avg}")
 
-def average_reward(env, agent, episodes=1000,):
-    total_reward = 0
-    for i in range(episodes):
-        total_reward += run_episode(env, agent)
-    return total_reward / episodes
+def debug_run(args):
+    env, our_agent, opponent_agent = create_env(args)
+    util.run_episode(env, our_agent, debug=True)
 
-def run_episode(env, agent, debug=False):
-    total_reward = 0
-    state, info = env.reset()
-    done = False
-    while not done:
-        action = agent.get_action(state)
-        state, reward, done, info = env.step(action)
-        total_reward += reward
-        
-        if debug:
-            env.render()
-            sleep(0.1)
-            
-    if debug:
-        print(f"Reward: {total_reward}")
-        input("> Press any key to continue")
+def run(args):
+    env, our_agent, opponent_agent = create_env(args)
 
-    return total_reward
+    episodes = args.episodes
+    rewards_hist = []
+    period = 1000
+    for i in range(1, episodes+1):
+        if i % period == 0:
+            print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
+
+        reward = util.run_episode(env, our_agent, debug=False)
+        if len(rewards_hist) >= period:
+            rewards_hist.pop(0)
+        rewards_hist.append(reward)
+
+    if args.save_agent_path is not None:
+        our_agent.save(args.save_agent_path)
+
+    if args.save_opponent_path is not None:
+        opponent.save(args.save_opponent_path)
+
+action_handlers = {
+    "benchmark-perf": benchmark_perf,
+    "benchmark-reward": benchmark_reward,
+    "debug-run": debug_run,
+    "run": run,
+}
+
+rewards = {
+    "end_game": end_game_reward,
+}
 
 if __name__ == "__main__":
     main()

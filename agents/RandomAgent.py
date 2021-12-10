@@ -11,6 +11,7 @@ class RandomAgent(AbstractAgent):
         board, player = state
         valid_actions = self.actions[board.flatten() == player.EMPTY]
         choice = int(random.random() * len(valid_actions))
+
         return valid_actions[choice]
 
     def load(self, path):

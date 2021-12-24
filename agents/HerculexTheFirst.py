@@ -2,6 +2,7 @@ import numpy as np
 from .models.cnn_model import CNNModel
 from .AbstractAgent import AbstractAgent
 
+
 class Herculex_the_first(AbstractAgent):
     def __init__(self, board_size) -> None:
         self.model = CNNModel(board_size=board_size)
@@ -33,9 +34,6 @@ class Herculex_the_first(AbstractAgent):
 
         self.epsilon **= 2
         return action
-
-    def set_collector(self, collector):  # important for future bots as well if we don't change the design pattern
-        self.collector = collector
 
     def save(self, path):
         print("What is there to save other than the weights")

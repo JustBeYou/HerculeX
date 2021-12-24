@@ -3,7 +3,8 @@ from keras.layers import Conv2D, Dropout, MaxPooling2D, Flatten, Dense
 import tensorflow as tf
 tf.config.run_functions_eagerly(True)
 
-class CNNModel():
+
+class CNNModel:
     def __init__(self, board_size):
         input_shape = (board_size, board_size, 1)
         self.model = Sequential()

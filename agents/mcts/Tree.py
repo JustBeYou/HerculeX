@@ -40,17 +40,15 @@ class Tree:
                     best_action = action
                     best_edge = edge
 
-                _, reward, done = self.simulate_next_state(curr_node.state, best_action)
-                history.append(best_edge)
-                curr_node = edge.child
+            _, reward, done = self.simulate_next_state(curr_node.state, best_action)
+            history.append(best_edge)
+            curr_node = best_edge.child
 
         return curr_node, reward, done, history
 
     def back_propagation(self, leaf, reward, history):
-        curr_player = leaf.player
-
         for edge in history:
-            sign = 1 if edge.player == curr_player else -1
+            sign = 1 if edge.player == self.root.player else -1
 
             edge.N = edge.N + 1
             edge.W = edge.W + reward * sign

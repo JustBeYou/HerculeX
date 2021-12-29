@@ -25,7 +25,7 @@ class HerculexTheSecond(AbstractAgent):
 
         self.constant = constant # constant used when calculating the value for each node
         self.collector = None
-        self.epsilon = 0.8
+        self.epsilon = 0.3
         self.tree = None
         self.root = None
 
@@ -51,7 +51,7 @@ class HerculexTheSecond(AbstractAgent):
             self.simulate()
 
         policy, rewards = self.get_policy_rewards()
-        action, reward = self.choose_action(policy, rewards)
+        action, reward = self.choose_action(policy, rewards, state)
 
         return action
 
@@ -60,23 +60,23 @@ class HerculexTheSecond(AbstractAgent):
         rewards = np.zeros(len(self.actions), dtype=np.float32)
 
         for action, edge in self.tree.root.edges:
-            policy[action] = edge.stats['N']
-            rewards[action] = edge.stats['Q']
+            policy[action] = edge.N
+            rewards[action] = edge.Q
 
         policy = policy / (np.sum(policy) * 1.0)
         return policy, rewards
 
-    def choose_action(self, policy, rewards):
+    def choose_action(self, policy, rewards, state):
         sampled_value = float(np.random.uniform(0, 1))
 
-        if sampled_value >= self.epsilon:
-            actions = np.argwhere(policy == max(policy))
-            action = np.random.choice(actions)[0]
+        if sampled_value <= self.epsilon:  # exploratory move
+            actions = [idx for idx, el in enumerate(policy) if el != 0]
+            action = np.random.choice(actions)
         else:
             action_idx = np.random.multinomial(1, policy)
             action = np.where(action_idx == 1)[0][0]
-            self.epsilon **= 2
 
+        self.epsilon **= 2
         reward = rewards[action]
 
         return action, reward
@@ -100,11 +100,15 @@ class HerculexTheSecond(AbstractAgent):
                 new_node = Node(new_state)
 
                 # Check if already in tree else add it
-                node = [node for node in self.tree.nodes if node == new_node]
-                if not node:
-                    self.tree.add_node(new_node)
-                else:
-                    new_node = node[0]
+                #node = [node for node in self.tree.nodes if node == new_node]
+                #if not node:
+                    #self.tree.add_node(new_node)
+                #else:
+                    #new_node = node[0]
+
+                # for testing we cut the optimization that is actually making the response time longer
+
+                self.tree.add_node(new_node)
 
                 new_edge = Edge(leaf, new_node, probabilities[idx], action)
                 leaf.edges.append((action, new_edge))
@@ -112,7 +116,6 @@ class HerculexTheSecond(AbstractAgent):
         return reward
 
     def get_predictions(self, state):
-        # TODO: State preparation for the model
         input = self.model.transform_input(state)
 
         predictions = self.model.predict(input)

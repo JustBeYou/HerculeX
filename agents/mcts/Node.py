@@ -1,3 +1,5 @@
+import numpy as np
+
 
 class Node:
     def __init__(self, state):
@@ -8,7 +10,7 @@ class Node:
         self.edges = []
 
     def __eq__(self, other):
-        return all((self.board == other.board)[0]) and self.player == other.player
+        return np.array_equal(self.board, other.board) and self.player == other.player
 
     def is_leaf(self):
         return len(self.edges) == 0

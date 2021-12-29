@@ -86,9 +86,10 @@ class ResidualModel:
         input = Input(shape=self.input_dim)
 
         model = self.conv_layer(input, self.hidden_layers[0]['filters'], self.hidden_layers[0]['kernel_size'])
+        model = self.residual_layer(model, self.hidden_layers[1]['filters'], self.hidden_layers[1]['kernel_size'])
 
-        for layer in self.hidden_layers[1:]:
-            model = self.residual_layer(model, layer['filters'], layer['kernel_size'])
+        #for layer in self.hidden_layers[1:]:
+            #model = self.residual_layer(model, layer['filters'], layer['kernel_size'])
 
         value_head = self.value_head(model)
         policy_head = self.policy_head(model)
@@ -96,7 +97,7 @@ class ResidualModel:
         model_final = Model(inputs=input, outputs=[value_head, policy_head])
         model_final.compile(loss={'value_head': 'mean_squared_error',
                                   'policy_head': self.softmax_cross_entropy_with_logits},
-                            optimizer=SGD(lr=self.learning_rate, momentum=self.momentum),
+                            optimizer=SGD(learning_rate=self.learning_rate, momentum=self.momentum),
                             loss_weights={'value_head': 0.5, 'policy_head': 0.5})
 
         return model_final

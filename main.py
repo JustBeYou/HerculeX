@@ -93,7 +93,7 @@ def create_env(args, col1, col2, col_flag=False):
     our_agent_class = get_class_of_module('agents', args.agent)
     opponent_class = get_class_of_module('agents', args.opponent)
 
-    our_agent = our_agent_class(board_size=args.board_size, constant=0.5, num_simulations=1300)
+    our_agent = our_agent_class(board_size=args.board_size, constant=0.5, num_simulations=10)
     opponent_agent = opponent_class(board_size=args.board_size)
 
     if col_flag:

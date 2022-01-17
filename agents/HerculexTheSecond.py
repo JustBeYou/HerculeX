@@ -8,29 +8,23 @@ from .mcts.Tree import Tree
 from .mcts.Node import Node
 from .mcts.Edge import Edge
 
+from datetime import datetime
 
 class HerculexTheSecond(AbstractAgent):
-    def __init__(self, board_size, constant, num_simulations) -> None:
+    def __init__(self, board_size, epsilon, constant, num_simulations, collector, model) -> None:
         self.board_size = board_size
 
-        hidden = [
-            {'filters': 64, 'kernel_size': (4, 4)}
-            , {'filters': 64, 'kernel_size': (4, 4)}
-        ]
+        self.model = model
 
-        self.model = ResidualModel(0.00001, 0.1, (board_size, board_size, 1), board_size ** 2, hidden, 0.9)
         self.actions = np.arange(board_size ** 2)
 
         self.num_simulations = num_simulations
 
         self.constant = constant # constant used when calculating the value for each node
-        self.collector = None
-        self.epsilon = 0.3
+        self.collector = collector
+        self.epsilon = epsilon
         self.tree = None
         self.root = None
-
-    def set_collector(self, collector):
-        self.collector = collector
 
     def build_tree(self, state):
         self.root = Node(state)
@@ -47,11 +41,17 @@ class HerculexTheSecond(AbstractAgent):
         else:
             self.change_root(node)
 
+        print('Starting to simulate')
+        start = datetime.now()
         for idx in range(self.num_simulations):
             self.simulate()
+        print('Finished a simulation, elapsed time: ' + str(datetime.now() - start))
 
         policy, rewards = self.get_policy_rewards()
         action, reward = self.choose_action(policy, rewards, state)
+
+        # here for now but might move if we decide to use multiple states for the network input
+        self.collector.record_decision(state=state, action=action)
 
         return action
 
@@ -82,15 +82,20 @@ class HerculexTheSecond(AbstractAgent):
         return action, reward
 
     def simulate(self):
+        start = datetime.now()
         leaf, reward, done, history = self.tree.get_best_leaf()
+        print('Get best leaf time: ' + str(datetime.now() - start))
 
+        start = datetime.now()
         reward = self.evaluate_leaf(leaf, reward, done)
+        print('Evaluate leaf time: ' + str(datetime.now() - start))
 
+        start = datetime.now()
         self.tree.back_propagation(leaf, reward, history)
+        print('Back prop time: ' + str(datetime.now() - start))
 
     def evaluate_leaf(self, leaf, reward, done):
         if not done:
-
             reward, probabilities, valid_actions = self.get_predictions(leaf.state)
             probabilities = probabilities[valid_actions]
 
@@ -100,13 +105,11 @@ class HerculexTheSecond(AbstractAgent):
                 new_node = Node(new_state)
 
                 # Check if already in tree else add it
-                #node = [node for node in self.tree.nodes if node == new_node]
-                #if not node:
-                    #self.tree.add_node(new_node)
-                #else:
-                    #new_node = node[0]
-
-                # for testing we cut the optimization that is actually making the response time longer
+                node = self.tree.check_node(new_node)
+                if not node:
+                    self.tree.add_node(new_node)
+                else:
+                    new_node = node
 
                 self.tree.add_node(new_node)
 
@@ -137,7 +140,7 @@ class HerculexTheSecond(AbstractAgent):
         return reward, probabilities, valid_actions
 
     def save(self, path):
-        print("What is there to save other than the weights")
+        self.model.save()
 
     def load(self, path):
-        print("What is there to save other than the weights")
+        self.model.load()

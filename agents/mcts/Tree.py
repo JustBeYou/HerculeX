@@ -5,16 +5,22 @@ class Tree:
     def __init__(self, root, const, board_size):
         self.root = root
         self.const = const  # constant used when calculating best value from the tree
-        self.nodes = []
         self.board_size = board_size
 
+        self.nodes_hash = {}
         self.add_node(root)
 
     def __len__(self):
-        return len(self.nodes)
+        return len(self.nodes_hash)
 
     def add_node(self, node):
-        self.nodes.append(node)
+        self.nodes_hash[node.id] = node
+
+    def check_node(self, node):
+        if node.id in self.nodes_hash:
+           return self.nodes_hash[node.id]
+
+        return None
 
     def get_best_leaf(self):
         curr_node = self.root
@@ -73,8 +79,3 @@ class Tree:
         reward = self.reward_function(winner)
 
         return (simulator.board, Player(simulator.active_player)), reward, simulator.done
-
-
-
-
-

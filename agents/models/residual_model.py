@@ -116,4 +116,4 @@ class ResidualModel:
         self.model.save('saved_models/' + version + '.h5')
 
     def load(self, version):
-        return load_model('save_models' + version + '.h5')
+        self.model = load_model('save_models' + version + '.h5')

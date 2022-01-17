@@ -3,16 +3,13 @@ from .models.cnn_model import CNNModel
 from .AbstractAgent import AbstractAgent
 
 
-class Herculex_the_first(AbstractAgent):
-    def __init__(self, board_size) -> None:
+class HerculexTheFirst(AbstractAgent):
+    def __init__(self, board_size, epsilon, constant, num_simulations, collector, model) -> None:
         self.model = CNNModel(board_size=board_size)
         self.actions = np.arange(board_size ** 2)
 
-        self.collector = None
-        self.epsilon = 0.8
-
-    def set_collector(self, collector):
         self.collector = collector
+        self.epsilon = epsilon
 
     def get_action(self, state, info=None):
         sampled_value = float(np.random.uniform(0, 1))

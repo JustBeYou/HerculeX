@@ -1,5 +1,6 @@
 import numpy as np
-
+from hashlib import sha1
+from marshal import dumps
 
 class Node:
     def __init__(self, state):
@@ -9,8 +10,10 @@ class Node:
 
         self.edges = []
 
+        self.id = sha1(dumps(self.board)).hexdigest()
+
     def __eq__(self, other):
-        return np.array_equal(self.board, other.board) and self.player == other.player
+        return self.id == other.id
 
     def is_leaf(self):
         return len(self.edges) == 0

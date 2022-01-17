@@ -1,12 +1,17 @@
 import gym
-import h5py
-from minihex.rewards import end_game_reward
+import constants
 import argparse
 import util
-from numpy import mean
+
 import numpy as np
+from numpy import mean
+
+from minihex.rewards import end_game_reward
+
 from agents.experience_utils.experience_collector import ExperienceCollector
 from agents.experience_utils.experience_buffer import ExperienceBuffer
+
+from agents.models.residual_model import ResidualModel
 
 BOARD_SIZE = 11
 
@@ -89,22 +94,14 @@ def get_class_of_module(mod_name, cls_name):
     mod = getattr(mod, cls_name)
     return getattr(mod, cls_name)
 
-def create_env(args, col1, col2, col_flag=False):
+def create_env(args, col1, col2, model):
     our_agent_class = get_class_of_module('agents', args.agent)
     opponent_class = get_class_of_module('agents', args.opponent)
 
-    our_agent = our_agent_class(board_size=args.board_size, constant=0.5, num_simulations=10)
-    opponent_agent = opponent_class(board_size=args.board_size)
-
-    if col_flag:
-        our_agent.set_collector(col1)
-        opponent_agent.set_collector(col2)
-
-    if args.load_agent_path is not None:
-        our_agent.load(args.load_agent_path)
-
-    if args.load_opponent_path is not None:
-        opponent_agent.load(args.load_opponent_path)
+    our_agent = our_agent_class(board_size=args.board_size, epsilon=constants.EPSILON, constant=constants.EPSILON,
+                                num_simulations=constants.NUM_SIMULATIONS, collector=col1, model=model)
+    opponent_agent = opponent_class(board_size=args.board_size, epsilon=constants.EPSILON, constant=constants.EPSILON,
+                                    num_simulations=constants.NUM_SIMULATIONS, collector=col2, model=model)
 
     env = gym.make("hex-v1",
                opponent_policy=opponent_agent.get_action,
@@ -147,18 +144,20 @@ def combine_experience(collectors):
         rewards= combined_rewards)
 
 def run(args):
+    # WILL LOAD MODEL SENT AS ARG BUT THIS IS JUST FOR TESTING RN
+    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
+
     our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
-    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector, True)
+    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector, model)
 
     episodes = args.episodes
     rewards_hist = []
-    period = 1000
+    period = 1
     for i in range(1, episodes+1):
         our_collector.init_episode()
         opponent_collector.init_episode()
-
-        if i % period == 0:
-            print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
 
         reward = util.run_episode(env, our_agent, debug=False)
 
@@ -174,17 +173,36 @@ def run(args):
             rewards_hist.pop(0)
         rewards_hist.append(reward)
 
+        if i % period == 0:
+            print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
+
     if args.save_agent_path is not None:
         our_agent.save(args.save_agent_path)
 
     if args.save_opponent_path is not None:
         opponent_agent.save(args.save_opponent_path)
 
+def train(args, version):
+    # load best network from file
+    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
+    model.load(version)
+    # retrain with data loaded from file
+    data = None
+    labels = None
+    model.fit(data, labels, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
+              validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
+
+    # save to file
+    model.save(version+1)
+
 action_handlers = {
     "benchmark-perf": benchmark_perf,
     "benchmark-reward": benchmark_reward,
     "debug-run": debug_run,
     "run": run,
+    "train": train
 }
 
 rewards = {

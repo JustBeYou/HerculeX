@@ -1,23 +1,27 @@
 import numpy as np
 import json
 
+
+def load(file):
+    return ExperienceBuffer(
+        game_states=np.array(file['experience']['game_states']),
+        search_probabilities=np.array(file['experience']['search_probabilities']),
+        winner=np.array(file['experience']['winner'])
+    )
+
+
 class ExperienceBuffer:
-    def __init__(self, states, actions, rewards):
-        self.states = states
-        self.rewards = rewards
-        self.actions = actions
+    def __init__(self, game_states, search_probabilities, winner):
+        self.game_states = game_states
+        self.search_probabilities = search_probabilities
+        self.winner = winner
 
-    def save(self, file):  # json
+    def save(self, file):  # npz
+        '''
         out = {  # list because apparently json doesn't know what to do with numpy array :?
-            'states': self.states.tolist(),
-            'rewards': self.rewards.tolist(),
-            'actions': self.actions.tolist(),
+            'game_states': self.game_states,
+            'search_probabilities': self.search_probabilities,
+            'winner': self.winner,
         }
-        json.dump(out, file)
-
-    def load(self, file):
-        return ExperienceBuffer(
-            states=np.array(file['experience']['states']),
-            actions=np.array(file['experience']['actions']),
-            rewards=np.array(file['experience']['rewards'])
-        )
+        json.dump(out, file)'''
+        np.savez(file, game_states=self.game_states, search_probabilities=self.search_probabilities, winner=self.winner)

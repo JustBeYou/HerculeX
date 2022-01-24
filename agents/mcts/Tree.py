@@ -46,9 +46,11 @@ class Tree:
                     best_action = action
                     best_edge = edge
 
-            _, reward, done = self.simulate_next_state(curr_node.state, best_action)
+            #_, reward, done = self.simulate_next_state(curr_node.state, best_action)
             history.append(best_edge)
             curr_node = best_edge.child
+            reward = curr_node.reward
+            done = curr_node.done
 
         return curr_node, reward, done, history
 
@@ -60,11 +62,6 @@ class Tree:
             edge.W = edge.W + reward * sign
             edge.Q = edge.W / edge.N
 
-    def action_to_coordinate(self, action):
-        y = action // self.board_size
-        x = action - self.board_size * y
-        return (y, x)
-
     def reward_function(self, winner):
         if self.root.player == winner:
             return 1
@@ -72,9 +69,12 @@ class Tree:
             return -1
         return 0
 
-    def simulate_next_state(self, state, action):
-        simulator = HexGame(active_player=state[1], board=state[0].copy(), focus_player=None)
+    def action_to_coordinate(self, action):
+        y = action // self.board_size
+        x = action - self.board_size * y
+        return (y, x)
 
+    def simulate_next_state(self, simulator, action):
         winner = simulator.make_move(action)
         reward = self.reward_function(winner)
 

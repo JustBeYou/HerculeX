@@ -1,12 +1,15 @@
 import tensorflow as tf
-tf.config.run_functions_eagerly(True)
+
+import constants
+import numpy as np
 
 from keras.models import Sequential, load_model, Model
 from keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
 from keras.optimizers import SGD
 from keras import regularizers
 
-import numpy as np
+tf.config.run_functions_eagerly(True)
+
 
 class ResidualModel:
     def __init__(self, regularizer, learning_rate, input_dim, output_dim, hidden_layers, momentum):
@@ -48,7 +51,7 @@ class ResidualModel:
 
     def conv_layer(self, model, filters, kernel_size):
         model = Conv2D(filters=filters, kernel_size=kernel_size, data_format="channels_last", padding='same',
-                    use_bias=False, activation='linear', kernel_regularizer=regularizers.l2(self.regularizer))(model)
+                       use_bias=False, activation='linear', kernel_regularizer=regularizers.l2(self.regularizer))(model)
         model = BatchNormalization(axis=1)(model)
         model = LeakyReLU()(model)
 
@@ -88,8 +91,8 @@ class ResidualModel:
         model = self.conv_layer(input, self.hidden_layers[0]['filters'], self.hidden_layers[0]['kernel_size'])
         model = self.residual_layer(model, self.hidden_layers[1]['filters'], self.hidden_layers[1]['kernel_size'])
 
-        #for layer in self.hidden_layers[1:]:
-            #model = self.residual_layer(model, layer['filters'], layer['kernel_size'])
+        for layer in self.hidden_layers[1:]:
+            model = self.residual_layer(model, layer['filters'], layer['kernel_size'])
 
         value_head = self.value_head(model)
         policy_head = self.policy_head(model)
@@ -106,8 +109,23 @@ class ResidualModel:
         return self.model.fit(data, labels, epochs=epochs, verbose=verbose, validation_split=validation_split,
                               batch_size=batch_size)
 
-    def transform_input(self, state):
-        return np.reshape(state[0], (1, self.input_dim[0], self.input_dim[1], 1))
+    def transform_input(self, game_state, player):
+        # idk why this code is so ugly but I was unable to find something prettier or faster
+        # TODO: improve this or Sad :(
+        ret0 = []
+        ret1 = []
+        for state in game_state:
+            temp0 = []
+            temp1 = []
+            for row in state:
+                temp0.append([2 if el == 0 or el == 2 else 1 for el in row])
+                temp1.append([2 if el == 1 or el == 2 else 0 for el in row])
+            ret0.append(temp0)
+            ret1.append(temp1)
+        ret = np.append(ret0, ret1)
+        ret = np.append(ret, (np.ones((constants.BOARD_SIZE, constants.BOARD_SIZE)) * player))
+
+        return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
 
     def predict(self, x):
         return self.model.predict(x)

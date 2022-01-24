@@ -126,8 +126,8 @@ class HexEnv(gym.Env):
 
     def opponent_move(self, info):
         state = (self.simulator.board, self.opponent)
-        opponent_action = self.opponent_policy(state,
-                                               info)
+        opponent_action = self.opponent_policy(state=state,
+                                               info=info, connected_stones=self.simulator.regions)
                                                
         if self.viewer is not None:
             color = (255, 0, 0) if self.opponent == Player.BLACK else (0, 0, 255)

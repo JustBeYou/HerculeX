@@ -1,3 +1,5 @@
+import datetime
+
 import gym
 import constants
 import argparse
@@ -12,8 +14,6 @@ from agents.experience_utils.experience_collector import ExperienceCollector
 from agents.experience_utils.experience_buffer import ExperienceBuffer
 
 from agents.models.residual_model import ResidualModel
-
-BOARD_SIZE = 11
 
 def main():
     args = parse_args()
@@ -43,7 +43,7 @@ def parse_args():
 
     parser.add_argument(
         '--board-size',
-        default=BOARD_SIZE,
+        default=constants.BOARD_SIZE,
     )
 
     parser.add_argument(
@@ -106,7 +106,7 @@ def create_env(args, col1, col2, model):
     env = gym.make("hex-v1",
                opponent_policy=opponent_agent.get_action,
                reward_function=rewards[args.reward_function],
-               board_size=BOARD_SIZE)
+               board_size=args.board_size)
 
     env.seed(args.seed)
 
@@ -128,20 +128,21 @@ def benchmark_reward(args):
     print(f"Average reward over {episodes} episodes: {avg}")
 
 def debug_run(args):
+    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
+
     our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
-    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector)
+    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector, model)
 
     util.run_episode(env, our_agent, debug=True)
 
-def combine_experience(collectors):
-    combined_states = np.concatenate([c.states for c in collectors])
-    combined_actions = np.concatenate([c.actions for c in collectors])
-    combined_rewards = np.concatenate([c.rewards for c in collectors])
+def combine_experience(our_coll, opp_coll):
+    game_states = np.append(our_coll.game_states, opp_coll.game_states)
+    search_probabilities = np.append(our_coll.search_probabilities, opp_coll.search_probabilities)
+    winner = np.append(our_coll.winner, opp_coll.winner)
 
-    return ExperienceBuffer(
-        states = combined_states,
-        actions = combined_actions,
-        rewards= combined_rewards)
+    return ExperienceBuffer(game_states, search_probabilities, winner)
 
 def run(args):
     # WILL LOAD MODEL SENT AS ARG BUT THIS IS JUST FOR TESTING RN
@@ -155,6 +156,8 @@ def run(args):
     episodes = args.episodes
     rewards_hist = []
     period = 1
+    start = datetime.datetime.now()
+
     for i in range(1, episodes+1):
         our_collector.init_episode()
         opponent_collector.init_episode()
@@ -164,11 +167,6 @@ def run(args):
         our_collector.complete_episode(reward)
         opponent_collector.complete_episode(-reward)
 
-        exp = combine_experience([our_collector, opponent_collector])
-
-        with open('test_exp.json', 'w') as file:
-            exp.save(file)
-
         if len(rewards_hist) >= period:
             rewards_hist.pop(0)
         rewards_hist.append(reward)
@@ -176,11 +174,17 @@ def run(args):
         if i % period == 0:
             print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
 
+    #buffer = combine_experience(our_collector, opponent_collector)
+    #buffer.save('exp.npz')
+
     if args.save_agent_path is not None:
         our_agent.save(args.save_agent_path)
 
     if args.save_opponent_path is not None:
         opponent_agent.save(args.save_opponent_path)
+
+    print('Finished----------------------------------')
+    print('Time' + str(datetime.datetime.now() - start))
 
 def train(args, version):
     # load best network from file

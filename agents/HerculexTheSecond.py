@@ -11,6 +11,7 @@ from .mcts.Edge import Edge
 
 from datetime import datetime
 
+
 class HerculexTheSecond(AbstractAgent):
     def __init__(self, board_size, epsilon, constant, num_simulations, collector, model) -> None:
         self.board_size = board_size
@@ -21,24 +22,24 @@ class HerculexTheSecond(AbstractAgent):
 
         self.num_simulations = num_simulations
 
-        self.constant = constant # constant used when calculating the value for each node
+        self.constant = constant  # constant used when calculating the value for each node
         self.collector = collector
         self.epsilon = epsilon
         self.tree = None
         self.root = None
 
-    def build_tree(self, state, connected_stones):
-        self.root = Node(state, 0, 0, connected_stones)
+    def build_tree(self, state):
+        self.root = Node(state, 0, 0)
         self.tree = Tree(self.root, self.constant, self.board_size)
 
     def change_root(self, new_root):
         self.tree.root = new_root
 
-    def get_action(self, state, connected_stones, info=None):
-        node = Node(state, 0, 0, connected_stones)
+    def get_action(self, state, info=None):
+        node = Node(state, 0, 0)
 
         if self.tree is None or self.tree.check_node(node) is None:
-            self.build_tree(state, connected_stones)
+            self.build_tree(state)
         else:
             node = self.tree.check_node(node)
             self.change_root(node)
@@ -80,24 +81,36 @@ class HerculexTheSecond(AbstractAgent):
         return action, reward
 
     def simulate(self):
+        start = datetime.now()
         leaf, reward, done, history = self.tree.get_best_leaf()
+        print('Get best leaf time: ' + str(datetime.now() - start))
 
+        start = datetime.now()
         reward = self.evaluate_leaf(leaf, reward, done, history)
+        print('Evaluate leaf time: ' + str(datetime.now() - start))
 
+        start = datetime.now()
         self.tree.back_propagation(leaf, reward, history)
+        print('Back prop time: ' + str(datetime.now() - start))
 
     def evaluate_leaf(self, leaf, reward, done, history):
         if not done:
             reward, probabilities, valid_actions = self.get_predictions(leaf.state, history)
             probabilities = probabilities[valid_actions]
 
+            connected_stones = None
+
             for idx, action in enumerate(valid_actions):
-                simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None,
-                                    connected_stones=leaf.connected_stones.copy())
+                if connected_stones is None:
+                    simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None)
+                    connected_stones = simulator.regions.copy()
+                else:
+                    simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None,
+                                        connected_stones=connected_stones.copy())
 
                 new_state, new_reward, new_done = self.tree.simulate_next_state(simulator, action)
 
-                new_node = Node(new_state, new_reward, new_done, simulator.regions)
+                new_node = Node(new_state, new_reward, new_done)
 
                 # Check if already in tree else add it
                 node = self.tree.check_node(new_node)
@@ -115,8 +128,7 @@ class HerculexTheSecond(AbstractAgent):
         game_state = [state[0]]
 
         if len(history) < 2:
-            game_state.append(state[0])
-            game_state.append(state[0])
+            game_state = [state[0], state[0], state[0]]
         else:
             for edge in reversed(history[-2:]):  # add the previous two states to the prediction
                 game_state.append(edge.parent.board)
@@ -124,8 +136,8 @@ class HerculexTheSecond(AbstractAgent):
         input = self.model.transform_input(game_state, state[1])
 
         predictions = self.model.predict(input)
-        reward = predictions[0][0]
-        probabilities = predictions[1][0]
+        reward = predictions[0][0].numpy()
+        probabilities = predictions[1][0].numpy()
 
         board, player = state
         valid_actions = self.actions[board.flatten() == player.EMPTY]

@@ -3,7 +3,7 @@ from abc import abstractmethod
 class AbstractAgent:
 
     @abstractmethod
-    def get_action(self, state, connected_stones, info=None):
+    def get_action(self, state, info=None):
         raise NotImplementedError
 
     @abstractmethod

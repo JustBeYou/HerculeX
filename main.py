@@ -15,9 +15,16 @@ from agents.experience_utils.experience_buffer import ExperienceBuffer
 
 from agents.models.residual_model import ResidualModel
 
+import tensorflow as tf
+
 def main():
     args = parse_args()
-    action_handlers[args.action](args)
+
+    tf.config.run_functions_eagerly(True)
+    tf.config.list_physical_devices('GPU')
+    #tf.debugging.set_log_device_placement(True)
+    with tf.device('/GPU:0'):
+        action_handlers[args.action](args)
 
 def parse_args():
     parser = argparse.ArgumentParser()

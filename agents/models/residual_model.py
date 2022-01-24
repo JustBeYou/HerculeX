@@ -3,13 +3,10 @@ import tensorflow as tf
 import constants
 import numpy as np
 
-from keras.models import Sequential, load_model, Model
-from keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
-from keras.optimizers import SGD
-from keras import regularizers
-
-tf.config.run_functions_eagerly(True)
-
+from tensorflow.keras.models import Sequential, load_model, Model
+from tensorflow.keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras import regularizers
 
 class ResidualModel:
     def __init__(self, regularizer, learning_rate, input_dim, output_dim, hidden_layers, momentum):
@@ -23,6 +20,7 @@ class ResidualModel:
         self.hidden_layers = hidden_layers
         self.num_hidden_layers = len(hidden_layers)
         self.model = self.build_model()
+        self.model.call = tf.function(self.model.call, experimental_relax_shapes=True)
 
     def softmax_cross_entropy_with_logits(y_true, y_pred):
         p = y_pred
@@ -127,8 +125,10 @@ class ResidualModel:
 
         return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
 
+    @tf.function
     def predict(self, x):
-        return self.model.predict(x)
+        return self.model(x, training=False)
+
 
     def save(self, version):
         self.model.save('saved_models/' + version + '.h5')

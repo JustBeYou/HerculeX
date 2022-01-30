@@ -9,13 +9,27 @@ from .mcts.Tree import Tree
 from .mcts.Node import Node
 from .mcts.Edge import Edge
 
+import constants
+
+from random import randint
+
 from datetime import datetime
 
 import tensorflow as tf
 
 class HerculexTheSecond(AbstractAgent):
-    def __init__(self, board_size, epsilon, constant, num_simulations, collector, model) -> None:
+    def __init__(self, board_size, epsilon, constant, num_simulations, collector, model = None) -> None:
         self.board_size = board_size
+
+
+        if model is None:
+            self.id = f"0_{randint(0, int(1e8))}"
+            model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                                  input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                                  hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
+                                  id = self.id)
+        else:
+            self.id = model.id
 
         self.model = model
 
@@ -153,7 +167,8 @@ class HerculexTheSecond(AbstractAgent):
         return reward, probabilities, valid_actions
 
     def save(self, path):
-        self.model.save()
+        self.model.save(path)
 
     def load(self, path):
-        self.model.load()
+        self.model.load(path)
+        self.id = self.model.id

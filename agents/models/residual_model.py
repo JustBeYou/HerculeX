@@ -10,10 +10,10 @@ from tensorflow.keras.layers import Input, Dense, Conv2D, Flatten, BatchNormaliz
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras import regularizers
 
-tf.random.set_seed(constants.SEED)
-
 class ResidualModel:
-    def __init__(self, regularizer, learning_rate, input_dim, output_dim, hidden_layers, momentum):
+    def __init__(self, regularizer, learning_rate, input_dim, output_dim, hidden_layers, momentum, id = 'noid'):
+        self.id = id
+
         self.regularizer = regularizer
         self.learning_rate = learning_rate
         self.input_dim = input_dim
@@ -161,8 +161,10 @@ class ResidualModel:
         return self.model(x, training=False)
 
 
-    def save(self, version):
-        self.model.save('saved_models/' + version + '.h5')
+    def save(self, path):
+        self.model.save(f"{path}/residual.{self.id}.h5")
 
-    def load(self, version):
-        self.model = load_model('save_models' + version + '.h5')
+    def load(self, path):
+        id = path.split(".")[-2]
+        self.model = load_model(path)
+        self.id = id

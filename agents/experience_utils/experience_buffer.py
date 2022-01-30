@@ -24,4 +24,4 @@ class ExperienceBuffer:
             'winner': self.winner,
         }
         json.dump(out, file)'''
-        np.savez(file, game_states=self.game_states, search_probabilities=self.search_probabilities, winner=self.winner)
+        np.savez_compressed(file, game_states=self.game_states, search_probabilities=self.search_probabilities, winner=self.winner)

@@ -17,19 +17,19 @@ from agents.models.residual_model import ResidualModel
 
 import tensorflow as tf
 
-def main():
-    args = parse_args()
+def main(argv = None):
+    args = parse_args(argv)
 
+    #tf.random.set_seed(constants.SEED)
     tf.config.run_functions_eagerly(False)
     #tf.compat.v1.disable_eager_execution()
     print(tf.executing_eagerly())
     tf.config.list_physical_devices('GPU')
-    tf.random.set_seed(constants.SEED)
     #tf.debugging.set_log_device_placement(True)
     with tf.device('/GPU:0'):
-        action_handlers[args.action](args)
+        return action_handlers[args.action](args)
 
-def parse_args():
+def parse_args(argv = None):
     parser = argparse.ArgumentParser()
     
     parser.add_argument(
@@ -97,21 +97,32 @@ def parse_args():
         default=None,
     )
 
-    return parser.parse_args()
+    parser.add_argument(
+        '--save-experience-path',
+        default=None,
+    )
+
+    return parser.parse_args(argv)
 
 def get_class_of_module(mod_name, cls_name):
     mod = __import__(f'{mod_name}.{cls_name}')
     mod = getattr(mod, cls_name)
     return getattr(mod, cls_name)
 
-def create_env(args, col1, col2, model):
+def create_env(args, col1, col2):
     our_agent_class = get_class_of_module('agents', args.agent)
     opponent_class = get_class_of_module('agents', args.opponent)
 
     our_agent = our_agent_class(board_size=args.board_size, epsilon=constants.EPSILON, constant=constants.EPSILON,
-                                num_simulations=constants.NUM_SIMULATIONS, collector=col1, model=model)
+                                num_simulations=constants.NUM_SIMULATIONS, collector=col1)
     opponent_agent = opponent_class(board_size=args.board_size, epsilon=constants.EPSILON, constant=constants.EPSILON,
-                                    num_simulations=constants.NUM_SIMULATIONS, collector=col2, model=model)
+                                    num_simulations=constants.NUM_SIMULATIONS, collector=col2)
+
+    if args.load_agent_path:
+        our_agent.load(args.load_agent_path)
+
+    if args.load_opponent_path:
+        opponent_agent.load(args.load_opponent_path)
 
     env = gym.make("hex-v1",
                opponent_policy=opponent_agent.get_action,
@@ -138,12 +149,8 @@ def benchmark_reward(args):
     print(f"Average reward over {episodes} episodes: {avg}")
 
 def debug_run(args):
-    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
-                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
-                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
-
     our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
-    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector, model)
+    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector)
 
     util.run_episode(env, our_agent, debug=True)
 
@@ -155,18 +162,22 @@ def combine_experience(our_coll, opp_coll):
     return ExperienceBuffer(game_states, search_probabilities, winner)
 
 def run(args):
-    # WILL LOAD MODEL SENT AS ARG BUT THIS IS JUST FOR TESTING RN
-    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
-                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
-                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
+
 
     our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
-    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector, model)
+    env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector)
 
     episodes = args.episodes
     rewards_hist = []
     period = 1
     start = datetime.datetime.now()
+
+    info = {
+        "wins": {
+            our_agent.id: 0,
+            opponent_agent.id: 0,
+        }
+    }
 
     for i in range(1, episodes+1):
         our_collector.init_episode()
@@ -181,11 +192,17 @@ def run(args):
             rewards_hist.pop(0)
         rewards_hist.append(reward)
 
+        if reward > 0:
+            info["wins"][our_agent.id] += 1
+        else:
+            info["wins"][opponent_agent.id] += 1
+
         if i % period == 0:
             print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
 
-    #buffer = combine_experience(our_collector, opponent_collector)
-    #buffer.save('exp.npz')
+    if args.save_experience_path:
+        buffer = combine_experience(our_collector, opponent_collector)
+        buffer.save(f"{args.save_experience_path}/experience.{our_agent.model.id}.npz")
 
     if args.save_agent_path is not None:
         our_agent.save(args.save_agent_path)
@@ -196,11 +213,11 @@ def run(args):
     print('Finished----------------------------------')
     print('Time' + str(datetime.datetime.now() - start))
 
+    return info
+
 def train(args, version):
+    pass
     # load best network from file
-    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
-                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
-                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM)
     model.load(version)
     # retrain with data loaded from file
     data = None

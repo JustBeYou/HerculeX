@@ -20,8 +20,11 @@ import tensorflow as tf
 def main():
     args = parse_args()
 
-    tf.config.run_functions_eagerly(True)
+    tf.config.run_functions_eagerly(False)
+    #tf.compat.v1.disable_eager_execution()
+    print(tf.executing_eagerly())
     tf.config.list_physical_devices('GPU')
+    tf.random.set_seed(constants.SEED)
     #tf.debugging.set_log_device_placement(True)
     with tf.device('/GPU:0'):
         action_handlers[args.action](args)

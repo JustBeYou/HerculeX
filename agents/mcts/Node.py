@@ -3,10 +3,11 @@ from hashlib import sha1
 from marshal import dumps
 
 class Node:
-    def __init__(self, state, reward, done):
+    def __init__(self, state, reward, done, connected_stones):
         self.state = state
         self.board = state[0]
         self.player = state[1]
+        self.connected_stones = connected_stones
 
         self.reward = reward
         self.done = done

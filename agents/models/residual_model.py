@@ -3,10 +3,14 @@ import tensorflow as tf
 import constants
 import numpy as np
 
+import datetime
+
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
 from tensorflow.keras.optimizers import SGD
 from tensorflow.keras import regularizers
+
+tf.random.set_seed(constants.SEED)
 
 class ResidualModel:
     def __init__(self, regularizer, learning_rate, input_dim, output_dim, hidden_layers, momentum):
@@ -20,7 +24,7 @@ class ResidualModel:
         self.hidden_layers = hidden_layers
         self.num_hidden_layers = len(hidden_layers)
         self.model = self.build_model()
-        self.model.call = tf.function(self.model.call, experimental_relax_shapes=True)
+        #self.model.call = tf.function(self.model.call, experimental_relax_shapes=True)
 
     def softmax_cross_entropy_with_logits(y_true, y_pred):
         p = y_pred
@@ -96,11 +100,12 @@ class ResidualModel:
         policy_head = self.policy_head(model)
 
         model_final = Model(inputs=input, outputs=[value_head, policy_head])
+        '''
         model_final.compile(loss={'value_head': 'mean_squared_error',
                                   'policy_head': self.softmax_cross_entropy_with_logits},
                             optimizer=SGD(learning_rate=self.learning_rate, momentum=self.momentum),
                             loss_weights={'value_head': 0.5, 'policy_head': 0.5})
-
+        '''
         return model_final
 
     def fit(self, data, labels, epochs, verbose, validation_split, batch_size):
@@ -110,6 +115,7 @@ class ResidualModel:
     def transform_input(self, game_state, player):
         # idk why this code is so ugly but I was unable to find something prettier or faster
         # TODO: improve this or Sad :(
+        '''
         ret0 = []
         ret1 = []
         for state in game_state:
@@ -124,9 +130,34 @@ class ResidualModel:
         ret = np.append(ret, (np.ones((constants.BOARD_SIZE, constants.BOARD_SIZE)) * player))
 
         return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
+        '''
+
+        ret = np.zeros(shape=(7, self.input_dim[0], self.input_dim[1]))
+        counter = 0
+
+        for idx, state in enumerate(game_state):
+            for id, row in enumerate(state):
+                ret[counter][id] = [2 if el == 0 or el == 2 else 1 for el in row]
+                ret[counter][id] = [2 if el == 0 or el == 2 else 1 for el in row]
+            counter += 3
+        ret[6] = (np.ones((constants.BOARD_SIZE, constants.BOARD_SIZE)) * player)
+
+        return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
 
     @tf.function
     def predict(self, x):
+        '''
+        stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        logdir = 'logs/trace/%s' % stamp
+        writer = tf.summary.create_file_writer(logdir)
+
+        tf.summary.trace_on(graph=True, profiler=True)
+        # Forward pass
+
+        out = self.model(x, training=False)
+        with writer.as_default():
+            tf.summary.trace_export(name="model_trace", step=0, profiler_outdir=logdir)
+        '''
         return self.model(x, training=False)
 
 

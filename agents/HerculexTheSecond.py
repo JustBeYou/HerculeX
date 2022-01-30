@@ -11,6 +11,7 @@ from .mcts.Edge import Edge
 
 from datetime import datetime
 
+import tensorflow as tf
 
 class HerculexTheSecond(AbstractAgent):
     def __init__(self, board_size, epsilon, constant, num_simulations, collector, model) -> None:
@@ -28,26 +29,26 @@ class HerculexTheSecond(AbstractAgent):
         self.tree = None
         self.root = None
 
-    def build_tree(self, state):
-        self.root = Node(state, 0, 0)
+    def build_tree(self, state, connected_stones):
+        self.root = Node(state, 0, 0, connected_stones)
         self.tree = Tree(self.root, self.constant, self.board_size)
 
     def change_root(self, new_root):
         self.tree.root = new_root
 
-    def get_action(self, state, info=None):
-        node = Node(state, 0, 0)
+    def get_action(self, state, connected_stones, info=None):
+        node = Node(state, 0, 0, connected_stones)
 
         if self.tree is None or self.tree.check_node(node) is None:
-            self.build_tree(state)
+            self.build_tree(state, connected_stones)
         else:
             node = self.tree.check_node(node)
             self.change_root(node)
 
-        start = datetime.now()
+        #start = datetime.now()
         for idx in range(self.num_simulations):
             self.simulate()
-        print('Finished a simulation, elapsed time: ' + str(datetime.now() - start))
+        #print('Finished a simulation, elapsed time: ' + str(datetime.now() - start))
 
         policy, rewards = self.get_policy_rewards()
         action, reward = self.choose_action(policy, rewards, state)
@@ -81,36 +82,30 @@ class HerculexTheSecond(AbstractAgent):
         return action, reward
 
     def simulate(self):
-        start = datetime.now()
+        #start = datetime.now()
         leaf, reward, done, history = self.tree.get_best_leaf()
-        print('Get best leaf time: ' + str(datetime.now() - start))
+        #print('Get best leaf time: ' + str(datetime.now() - start))
 
-        start = datetime.now()
+        #start = datetime.now()
         reward = self.evaluate_leaf(leaf, reward, done, history)
-        print('Evaluate leaf time: ' + str(datetime.now() - start))
+        #print('Evaluate leaf time: ' + str(datetime.now() - start))
 
-        start = datetime.now()
+        #start = datetime.now()
         self.tree.back_propagation(leaf, reward, history)
-        print('Back prop time: ' + str(datetime.now() - start))
+        #print('Back prop time: ' + str(datetime.now() - start))
 
     def evaluate_leaf(self, leaf, reward, done, history):
         if not done:
             reward, probabilities, valid_actions = self.get_predictions(leaf.state, history)
             probabilities = probabilities[valid_actions]
 
-            connected_stones = None
-
             for idx, action in enumerate(valid_actions):
-                if connected_stones is None:
-                    simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None)
-                    connected_stones = simulator.regions.copy()
-                else:
-                    simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None,
-                                        connected_stones=connected_stones.copy())
+                simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None,
+                                        connected_stones=leaf.connected_stones.copy())
 
                 new_state, new_reward, new_done = self.tree.simulate_next_state(simulator, action)
 
-                new_node = Node(new_state, new_reward, new_done)
+                new_node = Node(new_state, new_reward, new_done, simulator.regions)
 
                 # Check if already in tree else add it
                 node = self.tree.check_node(new_node)
@@ -125,17 +120,19 @@ class HerculexTheSecond(AbstractAgent):
         return reward
 
     def get_predictions(self, state, history):
-        game_state = [state[0]]
+        game_state = None
 
         if len(history) < 2:
             game_state = [state[0], state[0], state[0]]
         else:
-            for edge in reversed(history[-2:]):  # add the previous two states to the prediction
-                game_state.append(edge.parent.board)
+            game_state = np.zeros(shape=(3, self.board_size, self.board_size))
+            for idx, edge in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
+                game_state[idx] = edge.parent.board
 
         input = self.model.transform_input(game_state, state[1])
 
         predictions = self.model.predict(input)
+
         reward = predictions[0][0].numpy()
         probabilities = predictions[1][0].numpy()
 

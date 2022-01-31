@@ -2,6 +2,7 @@ import numpy as np
 from hashlib import sha1
 from marshal import dumps
 
+
 class Node:
     def __init__(self, state, reward, done, connected_stones):
         self.state = state

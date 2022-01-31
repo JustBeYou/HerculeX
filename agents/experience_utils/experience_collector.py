@@ -20,6 +20,9 @@ class ExperienceCollector:
     def complete_episode(self, reward):
         self.game_states += self.current_episode_game_states
         self.search_probabilities += self.current_episode_search_probabilities
+
+        print(np.shape(self.game_states))
+        print(np.shape(self.search_probabilities))
         self.winner.append(reward)
 
         self.init_episode()  # reinitialize

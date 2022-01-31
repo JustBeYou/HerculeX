@@ -27,7 +27,7 @@ class HerculexTheSecond(AbstractAgent):
             model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
                                   input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
                                   hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
-                                  id = self.id)
+                                  id=self.id)
         else:
             self.id = model.id
 
@@ -50,7 +50,7 @@ class HerculexTheSecond(AbstractAgent):
     def change_root(self, new_root):
         self.tree.root = new_root
 
-    def get_action(self, state, connected_stones, info=None):
+    def get_action(self, state, connected_stones, history, info=None):
         node = Node(state, 0, 0, connected_stones)
 
         if self.tree is None or self.tree.check_node(node) is None:
@@ -59,13 +59,24 @@ class HerculexTheSecond(AbstractAgent):
             node = self.tree.check_node(node)
             self.change_root(node)
 
-        #start = datetime.now()
         for idx in range(self.num_simulations):
             self.simulate()
-        #print('Finished a simulation, elapsed time: ' + str(datetime.now() - start))
 
         policy, rewards = self.get_policy_rewards()
         action, reward = self.choose_action(policy, rewards, state)
+
+        # save actual search probs and gameState
+        if len(history) < 2:
+            game_state = [state[0], state[0], state[0]]
+        else:
+            game_state = np.zeros(shape=(3, self.board_size, self.board_size))
+            for idx, state in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
+                game_state[idx] = state[0]
+
+        input = self.model.transform_input(game_state, state[1])
+        input = np.reshape(input, (constants.INPUT_DIM[0], constants.INPUT_DIM[1], constants.INPUT_DIM[2], 1))
+
+        self.collector.record_decision(input, policy)
 
         return action
 
@@ -96,17 +107,11 @@ class HerculexTheSecond(AbstractAgent):
         return action, reward
 
     def simulate(self):
-        #start = datetime.now()
         leaf, reward, done, history = self.tree.get_best_leaf()
-        #print('Get best leaf time: ' + str(datetime.now() - start))
 
-        #start = datetime.now()
         reward = self.evaluate_leaf(leaf, reward, done, history)
-        #print('Evaluate leaf time: ' + str(datetime.now() - start))
 
-        #start = datetime.now()
         self.tree.back_propagation(leaf, reward, history)
-        #print('Back prop time: ' + str(datetime.now() - start))
 
     def evaluate_leaf(self, leaf, reward, done, history):
         if not done:
@@ -142,6 +147,7 @@ class HerculexTheSecond(AbstractAgent):
             game_state = np.zeros(shape=(3, self.board_size, self.board_size))
             for idx, edge in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
                 game_state[idx] = edge.parent.board
+            game_state[2] = state[0]
 
         input = self.model.transform_input(game_state, state[1])
 
@@ -161,8 +167,6 @@ class HerculexTheSecond(AbstractAgent):
         # for the actions that are not allowed
         odds = np.exp(probabilities)
         probabilities = odds / np.sum(odds)
-
-        self.collector.record_decision(input, probabilities)
 
         return reward, probabilities, valid_actions
 

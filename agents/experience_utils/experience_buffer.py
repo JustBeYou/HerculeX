@@ -1,14 +1,14 @@
 import numpy as np
 import json
 
-
+'''
 def load(file):
     return ExperienceBuffer(
         game_states=np.array(file['experience']['game_states']),
         search_probabilities=np.array(file['experience']['search_probabilities']),
         winner=np.array(file['experience']['winner'])
     )
-
+'''
 
 class ExperienceBuffer:
     def __init__(self, game_states, search_probabilities, winner):

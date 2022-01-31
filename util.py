@@ -18,10 +18,10 @@ def run_episode(env, agent, debug=False):
     state, info = env.reset()
     done = False
     while not done:
-        action = agent.get_action(state=state, connected_stones=env.simulator.regions.copy())
+        action = agent.get_action(state=state, connected_stones=env.simulator.regions.copy(), history=env.history)
         state, reward, done, info = env.step(action)
         total_reward += reward
-        
+
         if debug:
             env.render()
             sleep(0.1)

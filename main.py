@@ -157,9 +157,13 @@ def debug_run(args):
     util.run_episode(env, our_agent, debug=True)
 
 def combine_experience(our_coll, opp_coll):
-    game_states = np.append(our_coll.game_states, opp_coll.game_states)
-    search_probabilities = np.append(our_coll.search_probabilities, opp_coll.search_probabilities)
+    game_states = np.append(our_coll.game_states, opp_coll.game_states, axis=0)
+    search_probabilities = np.append(our_coll.search_probabilities, opp_coll.search_probabilities, axis=0)
     winner = np.append(our_coll.winner, opp_coll.winner)
+
+    print('---------------------------------')
+    print(np.shape(game_states))
+    print(np.shape(search_probabilities))
 
     return ExperienceBuffer(game_states, search_probabilities, winner)
 
@@ -217,18 +221,37 @@ def run(args):
 
     return info
 
-def train(args, version):
-    pass
+def train(args):
+    #pass
     # load best network from file
-    model.load(version)
+    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                                  input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                                  hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
+                                  id=None)
+
+    model.load("./pipeline_data/old/residual.None.h5")
     # retrain with data loaded from file
-    data = None
-    labels = None
-    model.fit(data, labels, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
+    data_path = "pipeline_data/history/experience.0_7351740_85822412.npz"
+
+    data = np.load(data_path)
+    game_states = np.array(data['game_states']).astype('float32')
+    search_probabilities = np.array(data['search_probabilities']).astype('float32')
+    winner = np.array(data['winner']).astype('float32')
+
+    print('----------------------------------------------------------------')
+    print(type(game_states))
+    print(type(search_probabilities))
+    print(type(winner))
+    print('----------------------------------------------------------------')
+
+    train_X = game_states[:len(game_states)//2]
+    train_Y = {'value_head': np.repeat([winner[0]], len(game_states)//2),
+               'policy_head': search_probabilities[:len(game_states)//2]}
+    model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
               validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
 
     # save to file
-    model.save(version+1)
+    model.save('pipeline_data/best_model/working.h5')
 
 action_handlers = {
     "benchmark-perf": benchmark_perf,

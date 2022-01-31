@@ -19,6 +19,8 @@ class HexEnv(gym.Env):
         self.opponent_policy = opponent_policy
         self.reward_function = reward_function
 
+        self.history = None
+
         if board is None:
             board = Player.EMPTY * np.ones((board_size, board_size))
 
@@ -44,7 +46,9 @@ class HexEnv(gym.Env):
 
     def reset(self):
         self.viewer = None
-    
+
+        self.history = []
+
         if self.initial_regions is None:
             self.simulator = HexGame(self.active_player,
                                      self.initial_board.copy(),
@@ -81,6 +85,8 @@ class HexEnv(gym.Env):
     def step(self, action):
         if not self.simulator.done:
             self.winner = self.simulator.make_move(action)
+
+        self.history.append(self.simulator.board.copy())
 
         if self.viewer is not None:
             color = (255, 0, 0) if self.active_player == Player.BLACK else (0, 0, 255)
@@ -126,8 +132,11 @@ class HexEnv(gym.Env):
 
     def opponent_move(self, info):
         state = (self.simulator.board, self.opponent)
-        opponent_action = self.opponent_policy(state=state, info=info, connected_stones=self.simulator.regions)
-                                               
+        opponent_action = self.opponent_policy(state=state, info=info, connected_stones=self.simulator.regions,
+                                               history=self.history)
+
+        self.history.append(self.simulator.board.copy())
+
         if self.viewer is not None:
             color = (255, 0, 0) if self.opponent == Player.BLACK else (0, 0, 255)
             self.viewer.color_hexagon(*self.simulator.action_to_coordinate(opponent_action), color)                                 

@@ -17,6 +17,8 @@ from agents.models.residual_model import ResidualModel
 
 import tensorflow as tf
 
+from random import randint
+
 def main(argv = None):
     args = parse_args(argv)
 
@@ -202,7 +204,7 @@ def run(args):
 
     if args.save_experience_path:
         buffer = combine_experience(our_collector, opponent_collector)
-        buffer.save(f"{args.save_experience_path}/experience.{our_agent.model.id}.npz")
+        buffer.save(f"{args.save_experience_path}/experience.{our_agent.model.id}_{randint(0, int(1e8))}.npz")
 
     if args.save_agent_path is not None:
         our_agent.save(args.save_agent_path)

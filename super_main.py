@@ -5,30 +5,47 @@ Training pipeline
 0. If there are no existing models, generate two models, select the winning one
 1. choose the best model and start self-play on N threads (batch of M games)
 2. train the best model on K random batches of games
-3. evaluate candidates and replace the best model if winning percentage is >P (half red/half blue)
+3. evaluate candidates on Q*2 matches and replace the best model if winning percentage is >P (half red/half blue)
 
 """
 
 N = 2
 M = 1
 K = 3
+Q = 5
 P = 0.55
 
-from multiprocessing import Pool
-from os import listdir, unlink, system
-from main import main as real_main
+from multiprocessing import Process
+from os import listdir, unlink
+import os
+#from main import main as real_main
 from shutil import move
+from random import randint
+from time import sleep
 
 cand_path = "./pipeline_data/candidate_models"
 best_path = "./pipeline_data/best_model"
 exp_path = "./pipeline_data/history"
+old_path = "./pipeline_data/old"
 save_all = f"--save-agent-path {cand_path} --save-opponent-path {cand_path}"
 load_same = lambda p: f"--load-agent-path {p} --load-opponent-path {p}"
 herculex = "--agent HerculexTheSecond --opponent HerculexTheSecond"
 
+def parse_id(fname):
+    id = fname.split(".")[-2]
+    parts = id.split("_")
+    return id, parts
+
+def get_name(fname):
+    return fname.split(".")[-3]
+
+def get_rand_seed():
+    return randint(0, int(1e8))
+
 def do(cmd):
     print(f"[i] CMD: {cmd}")
-    return real_main(cmd.split())
+    #return real_main(cmd.split())
+    return {}
 
 def prepare():
     print("[i] Preparing base model...")
@@ -47,29 +64,121 @@ def prepare():
         else:
             unlink(f"{cand_path}/{fname}")
 
-    print(f"[i] Base model {listdir(best_path)[0]}")
+    print(f"[+] Base model {listdir(best_path)[0]}")
 
-def self_play(data):
-    i, best = data
+def self_play(i):
+    try:
+        best = listdir(best_path)[0]
 
-    print(f"[i] Play task {i} Model {best}. Will play {M} games.")
+        print(f"[i] Play task {i} Model {best}. Will play {M} games.")
 
-    best_model_path = f"{best_path}/{best}"
-    info = do(f'run {herculex} --episodes {M} {load_same(best_model_path)} --save-experience-path {exp_path}')
+        best_model_path = f"{best_path}/{best}"
+        info = do(f'run {herculex} --episodes {M} {load_same(best_model_path)} --save-experience-path {exp_path}')
 
-    print(f"[i] Play task {i} Model {best}. Summary: {info}")
+        ### DEBUG
+        id, _ = parse_id(best)
+        open(f"./pipeline_data/history/experience.{id}_{get_rand_seed()}.npz", "w").write("debug")
+        sleep(2)
+        ###
+
+        print(f"[+] Play task {i} Model {best}. Summary: {info}")
+    except Exception as e:
+        print(f"[!] Play task {i} failed. Exception: {e}")
 
 def train():
-    pass
+    try:
+        best = listdir(best_path)[0]
+
+        print(f"[i] Train task. Model {best}. Will train {K} batches of games.")
+
+        best_model_path = f"{best_path}/{best}"
+        id, parts = parse_id(best)
+        version, _ = parts
+        new_candidate_name = f"{get_name(best)}.{int(version) + 1}_{get_rand_seed()}.h5"
+        new_candidate_path = f"{cand_path}/{new_candidate_name}"
+
+        # TODO: add train command here
+
+        ### DEBUG
+        open(new_candidate_path, "w").write("debug")
+        sleep(3)
+        ###
+
+        print(f"[+] Train task. Model {best}. New candidate {new_candidate_name}")
+    except Exception as e:
+        print(f"[!] Train task failed. Exception: {e}")
 
 def evaluate():
-    pass
+    try:
+        candidates = listdir(cand_path)
+
+        matches = 2*Q
+        print(f"[i] Evaluate task. Will evaluate {len(candidates)} candidates, each on {matches} matches.")
+
+        for candidate in candidates:
+            best = listdir(best_path)[0]
+            print(f"[i] Evaluating candidate {candidate} vs best {best}")
+
+            best_model_path = f"{best_path}/{best}"
+            candidate_model_path = f"{cand_path}/{candidate}"
+
+            cand_id = parse_id(candidate)[0]
+            best_id = parse_id(best)[0]
+            
+
+            # TODO: run the evaluation here
+
+            ### DEBUG
+            cand_wins = randint(0, matches)
+            results = {
+                "wins": {
+                    cand_id: cand_wins,
+                    best_id: matches - cand_wins
+                }
+            }
+            sleep(2)
+            ###
+
+            win_rate = results["wins"][cand_id] / matches
+            print(f"[+] Evaluate task. Candidate {candidate} vs best {best}. Win rate candidate: {win_rate}")
+
+            if win_rate >= P:
+                print(f"[+] Evaluate task. Candidate {candidate} wins!")
+                move(candidate_model_path, best_path)
+                move(best_model_path, old_path)
+            else:
+                print(f"[+] Evaluate task. Best {best} wins!")
+                unlink(candidate_model_path)
+    except Exception as e:
+        print(f"[!] Evaluate task failed. Exception: {e}")
+
+def forever(func, *args):
+    while True:
+        func(*args)
+        sleep(1)
 
 def main():
     pass
 
 if __name__ == '__main__':
+    dirs = ["./pipeline_data", cand_path, best_path, exp_path, old_path]
+    for dir in dirs:
+        if not os.path.exists(dir):
+            os.mkdir(dir)
+
     if len(listdir('./pipeline_data/best_model')) == 0:
         prepare()
 
-    self_play((0, "residual.0_75788177.h5"))
+    processes = []
+    for i in range(N):
+        processes.append(Process(target=forever, args=(self_play, i)))
+        processes[-1].start()
+
+    processes.append(Process(target=forever, args=(train,)))
+    processes[-1].start()
+
+    processes.append(Process(target=forever, args=(evaluate,)))
+    processes[-1].start()
+
+    for p in processes:
+        p.join()

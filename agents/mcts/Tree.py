@@ -10,6 +10,9 @@ class Tree:
         self.nodes_hash = {}
         self.add_node(root)
 
+    def nice_size(self):
+        return self.root.nice_size()
+
     def __len__(self):
         return len(self.nodes_hash)
 

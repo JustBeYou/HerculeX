@@ -156,6 +156,9 @@ class ResidualModel:
     def save(self, path):
         self.model.save(f"{path}/residual.{self.id}.h5")
 
+    def save_smecheros(self, path):
+        self.model.save(path)
+
     def load(self, path):
         id = path.split(".")[-2]
         self.model = load_model(path, custom_objects={'softmax_cross_entropy_with_logits': softmax_cross_entropy_with_logits})

@@ -9,16 +9,15 @@ Training pipeline
 
 """
 
-N = 2
+N = 1
 M = 1
 K = 3
-Q = 5
+Q = 2
 P = 0.55
 
 from multiprocessing import Process
 from os import listdir, unlink
 import os
-#from main import main as real_main
 from shutil import move
 from random import randint
 from time import sleep
@@ -42,10 +41,12 @@ def get_name(fname):
 def get_rand_seed():
     return randint(0, int(1e8))
 
+real_main_func = None
+
 def do(cmd):
     print(f"[i] CMD: {cmd}")
-    #return real_main(cmd.split())
-    return {}
+    return real_main_func(cmd.split())
+    #return {}
 
 def prepare():
     print("[i] Preparing base model...")
@@ -66,6 +67,8 @@ def prepare():
 
     print(f"[+] Base model {listdir(best_path)[0]}")
 
+import gc
+
 def self_play(i):
     try:
         best = listdir(best_path)[0]
@@ -76,14 +79,17 @@ def self_play(i):
         info = do(f'run {herculex} --episodes {M} {load_same(best_model_path)} --save-experience-path {exp_path}')
 
         ### DEBUG
-        id, _ = parse_id(best)
-        open(f"./pipeline_data/history/experience.{id}_{get_rand_seed()}.npz", "w").write("debug")
-        sleep(2)
+        #id, _ = parse_id(best)
+        #open(f"./pipeline_data/history/experience.{id}_{get_rand_seed()}.npz", "w").write("debug")
+        #sleep(2)
         ###
 
         print(f"[+] Play task {i} Model {best}. Summary: {info}")
     except Exception as e:
-        print(f"[!] Play task {i} failed. Exception: {e}")
+        print(f"[!] Play task {i} failed. Exception:", e)
+        sleep(5)
+
+    gc.collect()
 
 def train():
     try:
@@ -97,16 +103,21 @@ def train():
         new_candidate_name = f"{get_name(best)}.{int(version) + 1}_{get_rand_seed()}.h5"
         new_candidate_path = f"{cand_path}/{new_candidate_name}"
 
-        # TODO: add train command here
+        did_train = do(f"train --experience-sample {K} --load-agent-path {best_model_path} --save-agent-path {new_candidate_path}")
+
+        if not did_train:
+            print("[-] Nothing to train. Will sleep.")
+            sleep(15)
+        else:
+            print(f"[+] Train task. Model {best}. New candidate {new_candidate_name}")
 
         ### DEBUG
-        open(new_candidate_path, "w").write("debug")
-        sleep(3)
+        #open(new_candidate_path, "w").write("debug")
+        #sleep(3)
         ###
-
-        print(f"[+] Train task. Model {best}. New candidate {new_candidate_name}")
     except Exception as e:
-        print(f"[!] Train task failed. Exception: {e}")
+        print(f"[!] Train task failed. Exception:", e)
+        sleep(5)
 
 def evaluate():
     try:
@@ -114,6 +125,11 @@ def evaluate():
 
         matches = 2*Q
         print(f"[i] Evaluate task. Will evaluate {len(candidates)} candidates, each on {matches} matches.")
+
+        if len(candidates) == 0:
+            print("[-] Nothing to evaluate. Will sleep")
+            sleep(15)
+            return
 
         for candidate in candidates:
             best = listdir(best_path)[0]
@@ -124,20 +140,27 @@ def evaluate():
 
             cand_id = parse_id(candidate)[0]
             best_id = parse_id(best)[0]
-            
-
-            # TODO: run the evaluation here
 
             ### DEBUG
-            cand_wins = randint(0, matches)
+            #cand_wins = randint(0, matches)
+            #results = {
+            #    "wins": {
+            #        cand_id: cand_wins,
+            #        best_id: matches - cand_wins
+            #    }
+            #}
+            #sleep(2)
+            ###
+
+            results1 = do(f'run {herculex} --episodes {Q} --load-agent-path {best_model_path} --load-opponent-path {candidate_model_path}')
+            results2 = do(f'run {herculex} --episodes {Q} --load-agent-path {candidate_model_path} --load-opponent-path {best_model_path}')
+
             results = {
                 "wins": {
-                    cand_id: cand_wins,
-                    best_id: matches - cand_wins
+                    cand_id: results1["wins"][cand_id] + results2["wins"][cand_id],
+                    best_id: results1["wins"][best_id] + results2["wins"][best_id],
                 }
             }
-            sleep(2)
-            ###
 
             win_rate = results["wins"][cand_id] / matches
             print(f"[+] Evaluate task. Candidate {candidate} vs best {best}. Win rate candidate: {win_rate}")
@@ -150,9 +173,13 @@ def evaluate():
                 print(f"[+] Evaluate task. Best {best} wins!")
                 unlink(candidate_model_path)
     except Exception as e:
-        print(f"[!] Evaluate task failed. Exception: {e}")
+        print(f"[!] Evaluate task failed. Exception:", e)
+        sleep(5)
 
 def forever(func, *args):
+    global real_main_func
+    from main import main as real_main
+    real_main_func = real_main
     while True:
         func(*args)
         sleep(1)
@@ -170,15 +197,15 @@ if __name__ == '__main__':
         prepare()
 
     processes = []
-    for i in range(N):
-        processes.append(Process(target=forever, args=(self_play, i)))
-        processes[-1].start()
-
+    # for i in range(N):
+    #    processes.append(Process(target=forever, args=(self_play, i)))
+    #    processes[-1].start()
+    #
     processes.append(Process(target=forever, args=(train,)))
     processes[-1].start()
 
-    processes.append(Process(target=forever, args=(evaluate,)))
-    processes[-1].start()
+    # processes.append(Process(target=forever, args=(evaluate,)))
+    # processes[-1].start()
 
     for p in processes:
         p.join()

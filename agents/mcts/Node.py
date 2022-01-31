@@ -16,6 +16,15 @@ class Node:
 
         self.id = sha1(dumps(self.board)).hexdigest()
 
+    def nice_size(self):
+        if len(self.edges) == 0:
+            return 1
+
+        t = 0
+        for (action, edge) in self.edges:
+            t += edge.child.nice_size()
+        return t
+
     def __eq__(self, other):
         return self.id == other.id
 

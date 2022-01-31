@@ -1,9 +1,12 @@
 import datetime
+import gc
 
 import gym
 import constants
 import argparse
 import util
+
+from os import listdir
 
 import numpy as np
 from numpy import mean
@@ -17,19 +20,19 @@ from agents.models.residual_model import ResidualModel
 
 import tensorflow as tf
 
-from random import randint
+from random import randint, choices
 
 def main(argv = None):
     args = parse_args(argv)
 
-    #tf.random.set_seed(constants.SEED)
     tf.config.run_functions_eagerly(False)
-    #tf.compat.v1.disable_eager_execution()
-    print(tf.executing_eagerly())
-    tf.config.list_physical_devices('GPU')
-    #tf.debugging.set_log_device_placement(True)
-    with tf.device('/GPU:0'):
-        return action_handlers[args.action](args)
+    if args.action == 'train':
+        tf.config.list_physical_devices('GPU')
+        with tf.device('/GPU:0'):
+            return action_handlers[args.action](args)
+    else:
+        with tf.device('/CPU:0'):
+            return action_handlers[args.action](args)
 
 def parse_args(argv = None):
     parser = argparse.ArgumentParser()
@@ -104,6 +107,12 @@ def parse_args(argv = None):
         default=None,
     )
 
+    parser.add_argument(
+        '--experience-sample',
+        type=int,
+        default=None,
+    )
+
     return parser.parse_args(argv)
 
 def get_class_of_module(mod_name, cls_name):
@@ -111,6 +120,7 @@ def get_class_of_module(mod_name, cls_name):
     mod = getattr(mod, cls_name)
     return getattr(mod, cls_name)
 
+from time import sleep
 def create_env(args, col1, col2):
     our_agent_class = get_class_of_module('agents', args.agent)
     opponent_class = get_class_of_module('agents', args.opponent)
@@ -122,9 +132,16 @@ def create_env(args, col1, col2):
 
     if args.load_agent_path:
         our_agent.load(args.load_agent_path)
+    else:
+        opponent_agent.model = our_agent.model
+        opponent_agent.id = our_agent.id
 
     if args.load_opponent_path:
-        opponent_agent.load(args.load_opponent_path)
+        if args.load_agent_path == args.load_opponent_path:
+            opponent_agent.model = our_agent.model
+            opponent_agent.id = our_agent.id
+        else:
+            opponent_agent.load(args.load_opponent_path)
 
     env = gym.make("hex-v1",
                opponent_policy=opponent_agent.get_action,
@@ -132,7 +149,6 @@ def create_env(args, col1, col2):
                board_size=args.board_size)
 
     env.seed(args.seed)
-
     return env, our_agent, opponent_agent
 
 def benchmark_perf(args):
@@ -168,9 +184,14 @@ def combine_experience(our_coll, opp_coll):
     return ExperienceBuffer(game_states, search_probabilities, winner)
 
 def run(args):
+    #args.save_experience_path = False
+    should_save_exp = bool(args.save_experience_path)
 
+    if should_save_exp:
+        our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
+    else:
+        our_collector, opponent_collector = None, None
 
-    our_collector, opponent_collector = ExperienceCollector(), ExperienceCollector()
     env, our_agent, opponent_agent = create_env(args, our_collector, opponent_collector)
 
     episodes = args.episodes
@@ -185,14 +206,17 @@ def run(args):
         }
     }
 
+
     for i in range(1, episodes+1):
-        our_collector.init_episode()
-        opponent_collector.init_episode()
+        if should_save_exp:
+            our_collector.init_episode()
+            opponent_collector.init_episode()
 
         reward = util.run_episode(env, our_agent, debug=False)
 
-        our_collector.complete_episode(reward)
-        opponent_collector.complete_episode(-reward)
+        if should_save_exp:
+            our_collector.complete_episode(reward)
+            opponent_collector.complete_episode(-reward)
 
         if len(rewards_hist) >= period:
             rewards_hist.pop(0)
@@ -221,44 +245,63 @@ def run(args):
 
     return info
 
+def generate_model(args):
+    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
+                          id=None)
+    model.id = "0_1337"
+    model.save("./pipeline_data/best_model")
+
 def train(args):
     #pass
     # load best network from file
+    data_path = "./pipeline_data/history"
+    k = args.experience_sample
+    actual_files = listdir(data_path)
+
+    if len(actual_files) == 0:
+        return False
+
+    experiences = choices(actual_files, k=min(k, len(actual_files)))
+
+    if len(experiences) == 0:
+        return False
+
     model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
                                   input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
                                   hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
                                   id=None)
 
-    model.load("./pipeline_data/old/residual.None.h5")
-    # retrain with data loaded from file
-    data_path = "pipeline_data/history/experience.0_7351740_85822412.npz"
+    if args.load_agent_path:
+        model.load(args.load_agent_path)
 
-    data = np.load(data_path)
-    game_states = np.array(data['game_states']).astype('float32')
-    search_probabilities = np.array(data['search_probabilities']).astype('float32')
-    winner = np.array(data['winner']).astype('float32')
+    for experience in experiences:
+        real_path = f"{data_path}/{experience}"
 
-    print('----------------------------------------------------------------')
-    print(type(game_states))
-    print(type(search_probabilities))
-    print(type(winner))
-    print('----------------------------------------------------------------')
+        data = np.load(real_path)
+        game_states = np.array(data['game_states']).astype('float32')
+        search_probabilities = np.array(data['search_probabilities']).astype('float32')
+        winner = np.array(data['winner']).astype('float32')
 
-    train_X = game_states[:len(game_states)//2]
-    train_Y = {'value_head': np.repeat([winner[0]], len(game_states)//2),
-               'policy_head': search_probabilities[:len(game_states)//2]}
-    model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
-              validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
+        train_X = game_states[:len(game_states)//2]
+        train_Y = {'value_head': np.repeat([winner[0]], len(game_states)//2),
+                   'policy_head': search_probabilities[:len(game_states)//2]}
+        model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
+                  validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
 
-    # save to file
-    model.save('pipeline_data/best_model/working.h5')
+    if args.save_agent_path:
+        model.save_smecheros(args.save_agent_path)
+
+    return True
 
 action_handlers = {
     "benchmark-perf": benchmark_perf,
     "benchmark-reward": benchmark_reward,
     "debug-run": debug_run,
     "run": run,
-    "train": train
+    "train": train,
+    "generate-model": generate_model,
 }
 
 rewards = {

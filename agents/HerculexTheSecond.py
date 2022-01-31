@@ -10,12 +10,15 @@ from .mcts.Node import Node
 from .mcts.Edge import Edge
 
 import constants
+from time import sleep
 
 from random import randint
 
 from datetime import datetime
 
 import tensorflow as tf
+
+import gc
 
 class HerculexTheSecond(AbstractAgent):
     def __init__(self, board_size, epsilon, constant, num_simulations, collector, model = None) -> None:
@@ -50,6 +53,11 @@ class HerculexTheSecond(AbstractAgent):
     def change_root(self, new_root):
         self.tree.root = new_root
 
+    def reset(self):
+        self.tree = None
+        self.root = None
+        gc.collect()
+
     def get_action(self, state, connected_stones, history, info=None):
         node = Node(state, 0, 0, connected_stones)
 
@@ -76,7 +84,13 @@ class HerculexTheSecond(AbstractAgent):
         input = self.model.transform_input(game_state, state[1])
         input = np.reshape(input, (constants.INPUT_DIM[0], constants.INPUT_DIM[1], constants.INPUT_DIM[2], 1))
 
-        self.collector.record_decision(input, policy)
+        if self.collector is not None:
+            self.collector.record_decision(input, policy)
+
+        #sz = self.tree.nice_size()
+        #print("tree", sz)
+
+        self.reset()
 
         return action
 
@@ -166,6 +180,8 @@ class HerculexTheSecond(AbstractAgent):
         # SOFTMAX function in order to convert all probabilities between 0-1 with the sum of 1 including the ones
         # for the actions that are not allowed
         odds = np.exp(probabilities)
+
+        #print(odds)
         probabilities = odds / np.sum(odds)
 
         return reward, probabilities, valid_actions

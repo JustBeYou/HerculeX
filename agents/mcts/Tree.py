@@ -32,7 +32,7 @@ class Tree:
         reward, done = 0, 0
 
         while not curr_node.is_leaf():
-            max_val = -999999
+            max_val = -np.inf
 
             N_parent = 0
 

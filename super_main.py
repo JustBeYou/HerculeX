@@ -8,19 +8,27 @@ Training pipeline
 3. evaluate candidates on Q*2 matches and replace the best model if winning percentage is >P (half red/half blue)
 
 """
+import constants
 
-N = 1
-M = 1
-K = 3
-Q = 2
+N = 2
+M = 200
+K = 5
+Q = 75
+B = 75
 P = 0.55
 
 from multiprocessing import Process
 from os import listdir, unlink
 import os
 from shutil import move
-from random import randint
+from random import randint, seed
 from time import sleep
+
+import os
+import binascii
+
+SEED = int(binascii.hexlify(os.urandom(8)), 16)
+seed(SEED)
 
 cand_path = "./pipeline_data/candidate_models"
 best_path = "./pipeline_data/best_model"
@@ -89,11 +97,19 @@ def self_play(i):
         print(f"[!] Play task {i} failed. Exception:", e)
         sleep(5)
 
+    # TODO: delete this exit!!!
+    #exit()
     gc.collect()
 
 def train():
     try:
         best = listdir(best_path)[0]
+
+        cands_len = len(listdir(cand_path))
+        if cands_len > 3:
+            print(f"[i] Train task sleep. Too many candidates.")
+            sleep(15)
+            return
 
         print(f"[i] Train task. Model {best}. Will train {K} batches of games.")
 
@@ -110,6 +126,8 @@ def train():
             sleep(15)
         else:
             print(f"[+] Train task. Model {best}. New candidate {new_candidate_name}")
+            for i in range(constants.TRAIN_ITERS):
+                do(f"train --experience-sample {K} --load-agent-path {best_model_path} --save-agent-path {new_candidate_path}")
 
         ### DEBUG
         #open(new_candidate_path, "w").write("debug")
@@ -176,6 +194,34 @@ def evaluate():
         print(f"[!] Evaluate task failed. Exception:", e)
         sleep(5)
 
+def benchmark():
+    try:
+        best = listdir(best_path)[0]
+        best_model_path = f"{best_path}/{best}"
+        best_id = parse_id(best)[0]
+
+        print(f"[i] Benchmark task. {best} on {2*B} matches.")
+
+        results1 = do(
+           f'run --agent HerculexTheSecond --opponent RandomAgent --episodes {B} --load-agent-path {best_model_path}')
+        results2 = do(
+            f'run  --agent RandomAgent --opponent HerculexTheSecond --episodes {B} --load-opponent-path {best_model_path}')
+
+        results = {
+            "wins": {
+                "randomvirgin": results1["wins"]["randomvirgin"] + results2["wins"]["randomvirgin"],
+                best_id: results1["wins"][best_id] + results2["wins"][best_id],
+            }
+        }
+
+        matches = 2*B
+        win_rate = results["wins"][best_id] / matches
+        print(f"[+] Benchmark task. Best {best} vs random agent. Win rate best: {win_rate}")
+        sleep(60)
+    except Exception as e:
+        print(f"[!] Benchmark task failed. Exception:", e)
+        sleep(60)
+
 def forever(func, *args):
     global real_main_func
     from main import main as real_main
@@ -197,15 +243,18 @@ if __name__ == '__main__':
         prepare()
 
     processes = []
-    # for i in range(N):
-    #    processes.append(Process(target=forever, args=(self_play, i)))
-    #    processes[-1].start()
-    #
+    for i in range(N):
+        processes.append(Process(target=forever, args=(self_play, i)))
+        processes[-1].start()
+
     processes.append(Process(target=forever, args=(train,)))
     processes[-1].start()
 
-    # processes.append(Process(target=forever, args=(evaluate,)))
-    # processes[-1].start()
+    processes.append(Process(target=forever, args=(evaluate,)))
+    processes[-1].start()
+
+    processes.append(Process(target=forever, args=(benchmark,)))
+    processes[-1].start()
 
     for p in processes:
         p.join()

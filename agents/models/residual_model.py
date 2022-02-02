@@ -136,27 +136,40 @@ class ResidualModel:
         return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
         '''
 
-        ret = np.zeros(shape=(7, self.input_dim[1], self.input_dim[1]))
-        counter = 0
+        ret = np.zeros(shape=(7, self.input_dim[0], self.input_dim[1]))
 
         for idx, state in enumerate(game_state):
             for id, row in enumerate(state):
-                ret[counter][id] = [2 if el == 0 or el == 2 else 1 for el in row]
-                ret[counter][id] = [2 if el == 0 or el == 2 else 1 for el in row]
-            counter += 3
-        ret[6] = (np.ones((constants.BOARD_SIZE, constants.BOARD_SIZE)) * player)
+                ret[idx][id] = [2 if el == 0 or el == 2 else 1 for el in row]
+                ret[idx+3][id] = [2 if el == 1 or el == 2 else 0 for el in row]
 
-        return np.reshape(ret, (1, 7, self.input_dim[1], self.input_dim[1], 1))
+        ret[6] = (np.ones((self.input_dim[0], self.input_dim[1])) * player)
+
+        ret = np.moveaxis(ret, 0, -1)
+
+        return np.reshape(ret, (1, *ret.shape))  # np.reshape(ret, (1, self.input_dim[0], self.input_dim[1], self.input_dim[2]))
 
     @tf.function
     def predict(self, x):
-        return self.model(x, training=False)
+        return self.model(x, training=True)
 
+    def model_refresh_without_nan(self):
+        import numpy as np
+        valid_weights = []
+        for l in self.model.get_weights():
+            if np.isnan(l).any():
+                valid_weights.append(np.nan_to_num(l))
+                print("!!!!!", l)
+            else:
+                valid_weights.append(l)
+        self.model.set_weights(valid_weights)
 
     def save(self, path):
+        self.model_refresh_without_nan()
         self.model.save(f"{path}/residual.{self.id}.h5")
 
     def save_smecheros(self, path):
+        self.model_refresh_without_nan()
         self.model.save(path)
 
     def load(self, path):
@@ -164,3 +177,5 @@ class ResidualModel:
         self.model = load_model(path, custom_objects={'softmax_cross_entropy_with_logits': softmax_cross_entropy_with_logits})
         self.compile()
         self.id = id
+
+        self.model_refresh_without_nan()

@@ -1,5 +1,7 @@
 import gym
 from gym import spaces
+
+import constants
 from .HexGame import Player, HexGame
 import numpy as np
 import random
@@ -114,11 +116,7 @@ class HexEnv(gym.Env):
                 self.simulator.done, info)
 
     def seed(self, seed=None):
-        if seed is None:
-            seed = 42
-        
-        random.seed(seed)
-        return [seed]
+        return []
 
     def render(self, mode='human', close=False):
         if mode == 'ansi':
@@ -132,10 +130,9 @@ class HexEnv(gym.Env):
 
     def opponent_move(self, info):
         state = (self.simulator.board, self.opponent)
-        opponent_action = self.opponent_policy(state=state, info=info, connected_stones=self.simulator.regions,
+        opponent_action = self.opponent_policy(state=state, info=info, connected_stones=self.simulator.regions.copy(),
                                                history=self.history)
 
-        self.history.append(self.simulator.board.copy())
 
         if self.viewer is not None:
             color = (255, 0, 0) if self.opponent == Player.BLACK else (0, 0, 255)
@@ -143,6 +140,8 @@ class HexEnv(gym.Env):
                                                
         self.winner = self.simulator.make_move(opponent_action)
         self.previous_opponent_move = opponent_action
+
+        self.history.append(self.simulator.board.copy())
         return opponent_action
 
     def _ansi_render(self):

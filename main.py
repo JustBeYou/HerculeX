@@ -1,5 +1,6 @@
 import datetime
 import gc
+import random
 
 import gym
 import constants
@@ -20,7 +21,12 @@ from agents.models.residual_model import ResidualModel
 
 import tensorflow as tf
 
-from random import randint, choices
+from random import randint, choices, sample
+import os
+import binascii
+
+SEED = int(binascii.hexlify(os.urandom(8)), 16)
+random.seed(SEED)
 
 def main(argv = None):
     args = parse_args(argv)
@@ -131,16 +137,20 @@ def create_env(args, col1, col2):
                                     num_simulations=constants.NUM_SIMULATIONS, collector=col2)
 
     if args.load_agent_path:
+        print("load agent")
         our_agent.load(args.load_agent_path)
-    else:
+    elif not args.load_opponent_path:
+        print("load opponent with same")
         opponent_agent.model = our_agent.model
         opponent_agent.id = our_agent.id
 
     if args.load_opponent_path:
         if args.load_agent_path == args.load_opponent_path:
+            print("load opponent with same 2")
             opponent_agent.model = our_agent.model
             opponent_agent.id = our_agent.id
         else:
+            print("load opponent simple")
             opponent_agent.load(args.load_opponent_path)
 
     env = gym.make("hex-v1",
@@ -196,7 +206,7 @@ def run(args):
 
     episodes = args.episodes
     rewards_hist = []
-    period = 1
+    period = int(args.episodes * 0.10)
     start = datetime.datetime.now()
 
     info = {
@@ -228,7 +238,7 @@ def run(args):
             info["wins"][opponent_agent.id] += 1
 
         if i % period == 0:
-            print(f"Training {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
+            print(f"Playing {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
 
     if args.save_experience_path:
         buffer = combine_experience(our_collector, opponent_collector)
@@ -279,14 +289,18 @@ def train(args):
     for experience in experiences:
         real_path = f"{data_path}/{experience}"
 
-        data = np.load(real_path)
+        data = np.load(real_path, allow_pickle=True)
         game_states = np.array(data['game_states']).astype('float32')
         search_probabilities = np.array(data['search_probabilities']).astype('float32')
-        winner = np.array(data['winner']).astype('float32')
+        #winner = np.array(data['winner']).astype('float32')
+        winner = data['winner']
 
-        train_X = game_states[:len(game_states)//2]
-        train_Y = {'value_head': np.repeat([winner[0]], len(game_states)//2),
-                   'policy_head': search_probabilities[:len(game_states)//2]}
+        indexes = sample(range(1, len(winner)), min(1000, len(winner) - 1))  # Get at least 100 random positions to train
+
+        train_X = game_states[indexes]
+        train_Y = {'value_head': winner[indexes],
+                   'policy_head': search_probabilities[indexes]}
+
         model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
                   validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
 

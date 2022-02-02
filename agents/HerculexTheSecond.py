@@ -82,16 +82,9 @@ class HerculexTheSecond(AbstractAgent):
                 game_state[idx] = state[0]
 
         input = self.model.transform_input(game_state, state[1])
-        input = np.reshape(input, (constants.INPUT_DIM[0], constants.INPUT_DIM[1], constants.INPUT_DIM[2], 1))
 
         if self.collector is not None:
-            self.collector.record_decision(input, policy)
-
-        #sz = self.tree.nice_size()
-        #print("tree", sz)
-
-        self.reset()
-
+            self.collector.record_decision(np.reshape(input, input.shape[1:]), policy)
         return action
 
     def get_policy_rewards(self):
@@ -173,6 +166,10 @@ class HerculexTheSecond(AbstractAgent):
         board, player = state
         valid_actions = self.actions[board.flatten() == player.EMPTY]
 
+        array_sum = np.sum(probabilities)
+        if np.isnan(array_sum):
+            print(probabilities, valid_actions, input)
+
         mask = np.ones(probabilities.shape, dtype=bool)
         mask[valid_actions] = False
         probabilities[mask] = -100
@@ -182,6 +179,7 @@ class HerculexTheSecond(AbstractAgent):
         odds = np.exp(probabilities)
 
         #print(odds)
+
         probabilities = odds / np.sum(odds)
 
         return reward, probabilities, valid_actions

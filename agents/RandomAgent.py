@@ -17,6 +17,8 @@ class RandomAgent(AbstractAgent):
 
     def get_action(self, state, connected_stones, history, info=None):
         board, player = state
+        board = board.copy() ### WTF!!!
+        player = player.copy()
         valid_actions = self.actions[board.flatten() == player.EMPTY]
         choice = int(random.random() * len(valid_actions))
 

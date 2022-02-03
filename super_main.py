@@ -11,10 +11,10 @@ Training pipeline
 import constants
 
 N = 2
-M = 200
-K = 5
-Q = 75
-B = 75
+M = 75
+K = 1
+Q = 50
+B = 100
 P = 0.55
 
 from multiprocessing import Process
@@ -84,6 +84,9 @@ def self_play(i):
         print(f"[i] Play task {i} Model {best}. Will play {M} games.")
 
         best_model_path = f"{best_path}/{best}"
+
+        hectic = do(f'run {herculex} --episodes {1} {load_same(best_model_path)}')
+
         info = do(f'run {herculex} --episodes {M} {load_same(best_model_path)} --save-experience-path {exp_path}')
 
         ### DEBUG
@@ -126,8 +129,6 @@ def train():
             sleep(15)
         else:
             print(f"[+] Train task. Model {best}. New candidate {new_candidate_name}")
-            for i in range(constants.TRAIN_ITERS):
-                do(f"train --experience-sample {K} --load-agent-path {best_model_path} --save-agent-path {new_candidate_path}")
 
         ### DEBUG
         #open(new_candidate_path, "w").write("debug")
@@ -138,6 +139,9 @@ def train():
         sleep(5)
 
 def evaluate():
+    import constants
+    constants.enable_release()
+
     try:
         candidates = listdir(cand_path)
 
@@ -170,6 +174,9 @@ def evaluate():
             #sleep(2)
             ###
 
+            fake = do(
+                f'run --agent HerculexTheSecond --opponent RandomAgent --episodes {1} --load-agent-path {best_model_path}')
+
             results1 = do(f'run {herculex} --episodes {Q} --load-agent-path {best_model_path} --load-opponent-path {candidate_model_path}')
             results2 = do(f'run {herculex} --episodes {Q} --load-agent-path {candidate_model_path} --load-opponent-path {best_model_path}')
 
@@ -181,12 +188,15 @@ def evaluate():
             }
 
             win_rate = results["wins"][cand_id] / matches
-            print(f"[+] Evaluate task. Candidate {candidate} vs best {best}. Win rate candidate: {win_rate}")
+            print(f"[+] Evaluate task. Candidate {candidate} vs best {best}. Win rate candidate: {win_rate} res: {results}")
 
             if win_rate >= P:
                 print(f"[+] Evaluate task. Candidate {candidate} wins!")
                 move(candidate_model_path, best_path)
                 move(best_model_path, old_path)
+
+                unlink(candidate_model_path)
+                unlink(best_model_path)
             else:
                 print(f"[+] Evaluate task. Best {best} wins!")
                 unlink(candidate_model_path)
@@ -195,12 +205,23 @@ def evaluate():
         sleep(5)
 
 def benchmark():
+    import constants
+    constants.enable_release()
+
     try:
         best = listdir(best_path)[0]
         best_model_path = f"{best_path}/{best}"
+        #best_model_path = "pipeline_data/old/residual.0_1337.h5"
         best_id = parse_id(best)[0]
+        #best_id = "0_1337"
 
         print(f"[i] Benchmark task. {best} on {2*B} matches.")
+
+        # for some reason load on the first run makes predicts awfully slow
+        fake = do(
+            f'run --agent HerculexTheSecond --opponent RandomAgent --episodes {1} --load-agent-path {best_model_path}')
+        ############
+
 
         results1 = do(
            f'run --agent HerculexTheSecond --opponent RandomAgent --episodes {B} --load-agent-path {best_model_path}')
@@ -215,8 +236,10 @@ def benchmark():
         }
 
         matches = 2*B
+
         win_rate = results["wins"][best_id] / matches
-        print(f"[+] Benchmark task. Best {best} vs random agent. Win rate best: {win_rate}")
+        print(f"[+] Benchmark task. Best {best} vs random agent. Win rate best: {win_rate} res: {results}")
+
         sleep(60)
     except Exception as e:
         print(f"[!] Benchmark task failed. Exception:", e)
@@ -249,9 +272,12 @@ if __name__ == '__main__':
 
     processes.append(Process(target=forever, args=(train,)))
     processes[-1].start()
-
+    
     processes.append(Process(target=forever, args=(evaluate,)))
     processes[-1].start()
+
+    # processes.append(Process(target=forever, args=(evaluate,)))
+    # processes[-1].start()
 
     processes.append(Process(target=forever, args=(benchmark,)))
     processes[-1].start()

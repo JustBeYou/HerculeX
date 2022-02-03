@@ -129,7 +129,7 @@ class HexEnv(gym.Env):
         return self.viewer.viewer.render(return_rgb_array=mode=='rgb_array')
 
     def opponent_move(self, info):
-        state = (self.simulator.board, self.opponent)
+        state = (self.simulator.board.copy(), self.opponent)
         opponent_action = self.opponent_policy(state=state, info=info, connected_stones=self.simulator.regions.copy(),
                                                history=self.history)
 

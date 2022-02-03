@@ -23,7 +23,7 @@ def run_episode(env, agent, debug=False):
             env.render()
             sleep(0.1)
 
-        action = agent.get_action(state=state, connected_stones=env.simulator.regions.copy(), history=env.history)
+        action = agent.get_action(state=(state[0].copy(), state[1].copy()), connected_stones=env.simulator.regions.copy(), history=env.history)
         state, reward, done, info = env.step(action)
         total_reward += reward
 

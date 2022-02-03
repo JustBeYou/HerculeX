@@ -18,6 +18,7 @@ from agents.experience_utils.experience_collector import ExperienceCollector
 from agents.experience_utils.experience_buffer import ExperienceBuffer
 
 from agents.models.residual_model import ResidualModel
+from agents.models.alpha_zero import Alpha
 
 import tensorflow as tf
 
@@ -206,7 +207,7 @@ def run(args):
 
     episodes = args.episodes
     rewards_hist = []
-    period = int(args.episodes * 0.10)
+    period = 25 # int(args.episodes * 0.10)
     start = datetime.datetime.now()
 
     info = {
@@ -228,9 +229,9 @@ def run(args):
             our_collector.complete_episode(reward)
             opponent_collector.complete_episode(-reward)
 
-        if len(rewards_hist) >= period:
-            rewards_hist.pop(0)
-        rewards_hist.append(reward)
+        # if len(rewards_hist) >= period:
+        #     rewards_hist.pop(0)
+        # rewards_hist.append(reward)
 
         if reward > 0:
             info["wins"][our_agent.id] += 1
@@ -238,7 +239,7 @@ def run(args):
             info["wins"][opponent_agent.id] += 1
 
         if i % period == 0:
-            print(f"Playing {i/episodes*100:.2f}% done. Average reward last {period} episodes: {mean(rewards_hist):.2f}")
+            print(f"Playing {i/episodes*100:.2f}% done. Ran: {period} episodes")
 
     if args.save_experience_path:
         buffer = combine_experience(our_collector, opponent_collector)
@@ -256,10 +257,13 @@ def run(args):
     return info
 
 def generate_model(args):
-    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
-                          input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
-                          hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
-                          id=None)
+    # model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+    #                       input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+    #                       hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
+    #                       id=None)
+
+    model = Alpha(id=None)
+
     model.id = "0_1337"
     model.save("./pipeline_data/best_model")
 
@@ -274,35 +278,40 @@ def train(args):
         return False
 
     experiences = choices(actual_files, k=min(k, len(actual_files)))
+    #experiences = actual_files[:1]
 
     if len(experiences) == 0:
         return False
 
-    model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
-                                  input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
-                                  hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
-                                  id=None)
+    # model = ResidualModel(regularizer=constants.REGULARIZER, learning_rate=constants.LEARNING_RATE,
+    #                               input_dim=constants.INPUT_DIM, output_dim=constants.OUTPUT_DIM,
+    #                               hidden_layers=constants.HIDDEN, momentum=constants.MOMENTUM,
+    #                               id=None)
+
+    model = Alpha(id=None)
 
     if args.load_agent_path:
         model.load(args.load_agent_path)
 
-    for experience in experiences:
-        real_path = f"{data_path}/{experience}"
+    for i in range(constants.TRAIN_ITERS):
+        for experience in experiences:
+            real_path = f"{data_path}/{experience}"
 
-        data = np.load(real_path, allow_pickle=True)
-        game_states = np.array(data['game_states']).astype('float32')
-        search_probabilities = np.array(data['search_probabilities']).astype('float32')
-        #winner = np.array(data['winner']).astype('float32')
-        winner = data['winner']
+            data = np.load(real_path, allow_pickle=True)
+            game_states = np.array(data['game_states']).astype('float32')
+            search_probabilities = np.array(data['search_probabilities']).astype('float32')
+            #winner = np.array(data['winner']).astype('float32')
+            winner = data['winner']
 
-        indexes = sample(range(1, len(winner)), min(1000, len(winner) - 1))  # Get at least 100 random positions to train
+            indexes = sample(range(1, len(winner)), min(constants.RANDOM_SAMPLES, len(winner) - 1))  # Get at least 15000 random positions to train
+            #indexes = np.arange(0, 100, 1, dtype=np.int)
 
-        train_X = game_states[indexes]
-        train_Y = {'value_head': winner[indexes],
-                   'policy_head': search_probabilities[indexes]}
+            train_X = game_states[indexes]
+            train_Y = {'value_out': winner[indexes],
+                       'policy_out': search_probabilities[indexes]}
 
-        model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
-                  validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
+            model.fit(train_X, train_Y, epochs=constants.EPOCHS, verbose=constants.VERBOSE,
+                      validation_split=constants.VALIDATION_SPLIT, batch_size=constants.BATCH_SIZE)
 
     if args.save_agent_path:
         model.save_smecheros(args.save_agent_path)

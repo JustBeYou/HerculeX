@@ -8,6 +8,12 @@ class Player(IntEnum):
     WHITE = 1
     EMPTY = 2
 
+    def __copy__(self):
+        return Player(self.value)
+
+    def copy(self):
+        return self.__copy__()
+
 class HexGame(object):
     def __init__(self, active_player, board,
                  focus_player, connected_stones=None, debug=False):

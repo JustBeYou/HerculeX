@@ -59,7 +59,8 @@ class Tree:
 
     def back_propagation(self, leaf, reward, history):
         for edge in history:
-            sign = 1 if edge.player == self.root.player else -1
+            #sign = -1 if edge.player == self.root.player else +1
+            sign = 1
 
             edge.N = edge.N + 1
             edge.W = edge.W + reward * sign

@@ -14,8 +14,8 @@ class ExperienceCollector:
         self.current_episode_search_probabilities = []
 
     def record_decision(self, game_state, search_probabilities):
-        self.current_episode_game_states.append(game_state)  # we are interested in just the board
-        self.current_episode_search_probabilities.append(search_probabilities)
+        self.current_episode_game_states.append(game_state.copy())  # we are interested in just the board
+        self.current_episode_search_probabilities.append(search_probabilities.copy())
 
     def complete_episode(self, reward):
         self.game_states += self.current_episode_game_states

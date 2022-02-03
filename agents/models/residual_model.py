@@ -7,7 +7,7 @@ import datetime
 
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.optimizers import SGD, Adam
 from tensorflow.keras import regularizers
 
 def softmax_cross_entropy_with_logits(y_true, y_pred):
@@ -102,14 +102,16 @@ class ResidualModel:
         model_final = Model(inputs=input, outputs=[value_head, policy_head])
         model_final.compile(loss={'value_head': 'mean_squared_error',
                                   'policy_head': softmax_cross_entropy_with_logits},
-                            optimizer=SGD(learning_rate=self.learning_rate, momentum=self.momentum),
+                            optimizer=Adam(learning_rate=self.learning_rate),
+        #SGD(learning_rate=self.learning_rate, momentum=self.momentum),
                             loss_weights={'value_head': 0.5, 'policy_head': 0.5})
         return model_final
 
     def compile(self):
         self.model.compile(loss={'value_head': 'mean_squared_error',
                                   'policy_head': softmax_cross_entropy_with_logits},
-                            optimizer=SGD(learning_rate=self.learning_rate, momentum=self.momentum),
+                            optimizer=Adam(learning_rate=self.learning_rate),
+                           #SGD(learning_rate=self.learning_rate, momentum=self.momentum),
                             loss_weights={'value_head': 0.5, 'policy_head': 0.5})
 
     def fit(self, data, labels, epochs, verbose, validation_split, batch_size):
@@ -136,14 +138,15 @@ class ResidualModel:
         return np.reshape(ret, (7, self.input_dim[0], self.input_dim[1], 1))
         '''
 
-        ret = np.zeros(shape=(7, self.input_dim[0], self.input_dim[1]))
+        ret = np.zeros(shape=(3, self.input_dim[0], self.input_dim[1]))
+        game_state = game_state[-1:]
 
         for idx, state in enumerate(game_state):
             for id, row in enumerate(state):
                 ret[idx][id] = [2 if el == 0 or el == 2 else 1 for el in row]
-                ret[idx+3][id] = [2 if el == 1 or el == 2 else 0 for el in row]
+                ret[idx+1][id] = [2 if el == 1 or el == 2 else 0 for el in row]
 
-        ret[6] = (np.ones((self.input_dim[0], self.input_dim[1])) * player)
+        ret[len(ret) - 1] = (np.ones((self.input_dim[0], self.input_dim[1])) * player)
 
         ret = np.moveaxis(ret, 0, -1)
 
@@ -165,11 +168,11 @@ class ResidualModel:
         self.model.set_weights(valid_weights)
 
     def save(self, path):
-        self.model_refresh_without_nan()
+        #self.model_refresh_without_nan()
         self.model.save(f"{path}/residual.{self.id}.h5")
 
     def save_smecheros(self, path):
-        self.model_refresh_without_nan()
+        #self.model_refresh_without_nan()
         self.model.save(path)
 
     def load(self, path):
@@ -178,4 +181,4 @@ class ResidualModel:
         self.compile()
         self.id = id
 
-        self.model_refresh_without_nan()
+        #self.model_refresh_without_nan()

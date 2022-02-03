@@ -10,9 +10,11 @@ from .mcts.Node import Node
 from .mcts.Edge import Edge
 
 import constants
-from time import sleep
+from time import sleep, time
 
 from random import randint
+
+from time import time_ns
 
 from datetime import datetime
 
@@ -59,6 +61,8 @@ class HerculexTheSecond(AbstractAgent):
         gc.collect()
 
     def get_action(self, state, connected_stones, history, info=None):
+        #print("[DEBUG] START", state[1])
+        stime = time()
         node = Node(state, 0, 0, connected_stones)
 
         if self.tree is None or self.tree.check_node(node) is None:
@@ -67,24 +71,38 @@ class HerculexTheSecond(AbstractAgent):
             node = self.tree.check_node(node)
             self.change_root(node)
 
+        #print("[DEBUG] MID 1", state[1])
+
         for idx in range(self.num_simulations):
             self.simulate()
 
+        stime2 = time()
+        #print("[DEBUG] MID ", stime2 - stime)
+
+        #print("[DEBUG] MID 2", state[1])
+
         policy, rewards = self.get_policy_rewards()
-        action, reward = self.choose_action(policy, rewards, state)
+        action, reward = self.choose_action(policy, rewards)
+
+        #print("[DEBUG] MID fuck", state[1])
 
         # save actual search probs and gameState
         if len(history) < 2:
-            game_state = [state[0], state[0], state[0]]
+            game_state = [state[0].copy(), state[0].copy(), state[0].copy()]
         else:
             game_state = np.zeros(shape=(3, self.board_size, self.board_size))
-            for idx, state in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
-                game_state[idx] = state[0]
+            for idx, elem_state in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
+                game_state[idx] = elem_state[0].copy()
 
-        input = self.model.transform_input(game_state, state[1])
+        #print("[DEBUG] MID 3", state[1])
+
+        input = self.model.transform_input(game_state, state[1].copy())
 
         if self.collector is not None:
             self.collector.record_decision(np.reshape(input, input.shape[1:]), policy)
+
+        #print(f"[DEBUG] END", state[1], f"{action} {time() - stime2}")
+        self.reset()
         return action
 
     def get_policy_rewards(self):
@@ -98,35 +116,44 @@ class HerculexTheSecond(AbstractAgent):
         policy = policy / (np.sum(policy) * 1.0)
         return policy, rewards
 
-    def choose_action(self, policy, rewards, state):
+    def choose_action(self, policy, rewards):
         sampled_value = float(np.random.uniform(0, 1))
 
-        if sampled_value <= self.epsilon:  # exploratory move
+        if sampled_value <= self.epsilon and not constants.RELEASE:  # exploratory move
             actions = [idx for idx, el in enumerate(policy) if el != 0]
             action = np.random.choice(actions)
+            #print("[DEBUG] Explore")
         else:
             action_idx = np.random.multinomial(1, policy)
             action = np.where(action_idx == 1)[0][0]
+            #print("[DEBUG] Exploit")
 
-        self.epsilon **= 2
+        self.epsilon *= constants.EPSILON_DECAY
         reward = rewards[action]
 
+        #print(f"[DEBUG] Play {action} {reward}")
         return action, reward
 
     def simulate(self):
+        #stime = datetime.now()
         leaf, reward, done, history = self.tree.get_best_leaf()
+        #print('[DEBUG] Best leaf time: ', datetime.now()-stime)
+
 
         reward = self.evaluate_leaf(leaf, reward, done, history)
 
+        #stime = datetime.now()
         self.tree.back_propagation(leaf, reward, history)
+        #print('[DEBUG] Back prop time: ', datetime.now() - stime)
 
     def evaluate_leaf(self, leaf, reward, done, history):
         if not done:
-            reward, probabilities, valid_actions = self.get_predictions(leaf.state, history)
+            reward, probabilities, valid_actions = self.get_predictions([leaf.state[0].copy(), leaf.state[1].copy()], history)
+
             probabilities = probabilities[valid_actions]
 
             for idx, action in enumerate(valid_actions):
-                simulator = HexGame(active_player=leaf.state[1], board=leaf.state[0].copy(), focus_player=None,
+                simulator = HexGame(active_player=leaf.state[1].copy(), board=leaf.state[0].copy(), focus_player=None,
                                         connected_stones=leaf.connected_stones.copy())
 
                 new_state, new_reward, new_done = self.tree.simulate_next_state(simulator, action)
@@ -143,32 +170,39 @@ class HerculexTheSecond(AbstractAgent):
                 new_edge = Edge(leaf, new_node, probabilities[idx], action)
                 leaf.edges.append((action, new_edge))
 
+        #print (f"[DEBUG] evaluated {len(self.tree)}")
+
         return reward
 
     def get_predictions(self, state, history):
         game_state = None
 
         if len(history) < 2:
-            game_state = [state[0], state[0], state[0]]
+            game_state = [state[0].copy(), state[0].copy(), state[0].copy()]
         else:
             game_state = np.zeros(shape=(3, self.board_size, self.board_size))
             for idx, edge in enumerate(reversed(history[-2:])):  # add the previous two states to the prediction
-                game_state[idx] = edge.parent.board
-            game_state[2] = state[0]
+                game_state[idx] = edge.parent.board.copy()
+            game_state[2] = state[0].copy()
 
-        input = self.model.transform_input(game_state, state[1])
+        input = self.model.transform_input(game_state, state[1].copy())
 
+        #stime = datetime.now()
         predictions = self.model.predict(input)
+        #print('[DEBUG] Is predict fucked? : ', datetime.now() - stime, self.model.id)
 
         reward = predictions[0][0].numpy()
         probabilities = predictions[1][0].numpy()
 
         board, player = state
+        board = board.copy() #### WTF!!!
+        player = player.copy()
         valid_actions = self.actions[board.flatten() == player.EMPTY]
 
-        array_sum = np.sum(probabilities)
-        if np.isnan(array_sum):
-            print(probabilities, valid_actions, input)
+        #array_sum = np.sum(probabilities)
+        #if np.isnan(array_sum):
+        #    print(probabilities, valid_actions, input)
+
 
         mask = np.ones(probabilities.shape, dtype=bool)
         mask[valid_actions] = False

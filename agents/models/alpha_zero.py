@@ -1,3 +1,7 @@
+# Model taken for refference
+# This was used for testing purposes
+# !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 from tensorflow.keras.models import Sequential, load_model, Model
 from tensorflow.keras.layers import Input, Dense, Conv2D, Flatten, BatchNormalization, Activation, LeakyReLU, add, Add
 from tensorflow.keras.optimizers import SGD, Adam

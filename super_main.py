@@ -13,7 +13,7 @@ import constants
 N = 2
 M = 75
 K = 1
-Q = 50
+Q = 10
 B = 100
 P = 0.55
 
@@ -266,15 +266,15 @@ if __name__ == '__main__':
         prepare()
 
     processes = []
-    for i in range(N):
-        processes.append(Process(target=forever, args=(self_play, i)))
-        processes[-1].start()
-
-    processes.append(Process(target=forever, args=(train,)))
-    processes[-1].start()
+    # for i in range(N):
+    #     processes.append(Process(target=forever, args=(self_play, i)))
+    #     processes[-1].start()
+    #
+    # processes.append(Process(target=forever, args=(train,)))
+    # processes[-1].start()
     
-    processes.append(Process(target=forever, args=(evaluate,)))
-    processes[-1].start()
+    # processes.append(Process(target=forever, args=(evaluate,)))
+    # processes[-1].start()
 
     # processes.append(Process(target=forever, args=(evaluate,)))
     # processes[-1].start()

@@ -1,1 +1,6 @@
 ﻿__pycache__/
+
+# pycharm
+.idea/
+
+pipeline_data/
